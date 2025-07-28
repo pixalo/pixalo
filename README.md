@@ -3,7 +3,6 @@
 A powerful and flexible 2D game engine built with JavaScript, designed for creating interactive web games and applications.
 
 ## ✨ Features
-
 - 🎯 High-performance 2D rendering system
 - 🏃 Advanced animation support with keyframes
 - 🎨 Background layer management
@@ -14,6 +13,7 @@ A powerful and flexible 2D game engine built with JavaScript, designed for creat
 - 🗺️ Tile map system for level design
 - 🎆 Particle emitter system
 - 📸 Screenshot functionality
+- 📹 Camera system with zoom, rotation, and cinematic presets
 - 🎚️ Quality control and scaling
 - 🐞 Built-in debugging tools
 
