@@ -46,6 +46,11 @@ class Camera {
             fade: null,
             cinematic: null
         };
+
+        this.rotation = config.rotation || 0; // Current rotation angle
+        this._targetRotation = this.rotation; // Target angle for rotation
+        this._lastRotation = this.rotation;   // Previous angle to calculate changes
+        this.deltaRotation = 0;               // The amount of change in rotation
     }
 
     /** ======== MOVEMENT ======== */
@@ -244,6 +249,57 @@ class Camera {
     }
     /** ======== END ======== */
 
+    /** ======== ROTATION ======== */
+    rotate (angle, instant = false, duration = 500, easing = 'easeInOutCubic') {
+        // Angle normalization between 0 and 360 degrees
+        angle = angle % 360;
+        if (angle < 0) angle += 360;
+
+        // If the rotation is immediate
+        if (instant || !duration) {
+            this.rotation = this._targetRotation = angle;
+            return this;
+        }
+
+        // Rotation with animation
+        const startRotation = this.rotation;
+        const startTime = Date.now();
+
+        // Disable temporary softening
+        this.smoothing = false;
+        easing = typeof easing === 'function' ? easing : this.engine.Ease[easing] || this.engine.Ease['easeInOutCubic'];
+
+        const animate = () => {
+            const progress = Math.min((Date.now() - startTime) / duration, 1);
+            const t = easing(progress);
+
+            // Calculating the shortest turning path
+            let diff = angle - startRotation;
+            if (Math.abs(diff) > 180) {
+                if (diff > 0) {
+                    diff -= 360;
+                } else {
+                    diff += 360;
+                }
+            }
+
+            this.rotation = this._targetRotation = startRotation + diff * t;
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                this.smoothing = true;
+            }
+        };
+
+        animate();
+        return this;
+    }
+    rotateBy (deltaAngle, instant = false, duration = 500, easing = 'easeInOutCubic') {
+        return this.rotate(this.rotation + deltaAngle, instant, duration, easing);
+    }
+    /** ======== END ======== */
+
     /** ======== LIMIT ZONE ======== */
     setBounds (bounds) {
         this.bounds = bounds;
@@ -307,9 +363,8 @@ class Camera {
 
     apply (ctx) {
         ctx.save();
-
-        // First we apply the general transforms.
         ctx.translate(this.engine.baseWidth / 2, this.engine.baseHeight / 2);
+        ctx.rotate(this.rotation * Math.PI / 180);
         ctx.scale(this.zoom, this.zoom);
         ctx.translate(
             -this.engine.baseWidth / (2 * this.zoom) - this.x,
@@ -320,6 +375,8 @@ class Camera {
         ctx.restore();
     }
     update () {
+        this._lastRotation = this.rotation;
+
         // Save previous values
         this._lastX = this.x;
         this._lastY = this.y;
@@ -348,17 +405,20 @@ class Camera {
             this.x += (this._targetX - this.x) * speed;
             this.y += (this._targetY - this.y) * speed;
             this.zoom += (this._targetZoom - this.zoom) * this.smoothSpeed;
+            this.rotation += (this._targetRotation - this.rotation) * this.smoothSpeed;
         } else {
             // Otherwise, move immediately.
             this.x = this._targetX;
             this.y = this._targetY;
             this.zoom = this._targetZoom;
+            this.rotation = this._targetRotation;
         }
 
         // Calculating changes
         this.deltaX = this.x - this._lastX;
         this.deltaY = this.y - this._lastY;
         this.deltaZoom = this.zoom - this._lastZoom;
+        this.deltaRotation = this.rotation - this._lastRotation;
 
         // Applying restrictions
         this._enforceBounds();
@@ -369,33 +429,47 @@ class Camera {
     screenToWorld (screenX, screenY) {
         const rect = this.engine.canvas.getBoundingClientRect();
 
-        // 1. Converting page coordinates to canvas coordinates considering physical size
+        // Converting page coordinates to canvas coordinates considering physical size
         const viewX = (screenX - rect.left) * (this.engine.canvas.width / rect.width);
         const viewY = (screenY - rect.top) * (this.engine.canvas.height / rect.height);
 
-        // 2. Eliminate the overall scale effect
+        // Remove the quality effect
         const unscaledX = viewX / this.engine.config.quality;
         const unscaledY = viewY / this.engine.config.quality;
 
-        // 3. Removing the effect of zoom and calculating position in the game world
-        const worldX = unscaledX / this.zoom + this.x;
-        const worldY = unscaledY / this.zoom + this.y;
+        // Move to the center of the viewport
+        const centerX = unscaledX - this.engine.baseWidth / 2;
+        const centerY = unscaledY - this.engine.baseHeight / 2;
+
+        // Inverting the rotation using the inverse rotation matrix
+        const rotationRad = -this.rotation * Math.PI / 180; // Negative to reverse rotation
+        const rotatedX = centerX * Math.cos(rotationRad) - centerY * Math.sin(rotationRad);
+        const rotatedY = centerX * Math.sin(rotationRad) + centerY * Math.cos(rotationRad);
+
+        // Removing the zoom effect and calculating the position in the world
+        const worldX = rotatedX / this.zoom + this.x + this.engine.baseWidth / (2 * this.zoom);
+        const worldY = rotatedY / this.zoom + this.y + this.engine.baseHeight / (2 * this.zoom);
 
         return {x: worldX, y: worldY};
     }
     worldToScreen (worldX, worldY) {
-        // 1. Apply camera position
-        const cameraX = (worldX - this.x) * this.zoom;
-        const cameraY = (worldY - this.y) * this.zoom;
+        // Convert to coordinates relative to the camera center
+        const relativeX = (worldX - this.x) * this.zoom;
+        const relativeY = (worldY - this.y) * this.zoom;
 
-        // 2. Apply overall scale
-        const scaledX = cameraX * this.engine.config.quality;
-        const scaledY = cameraY * this.engine.config.quality;
+        // Applying rotation using the rotation matrix
+        const rotationRad = this.rotation * Math.PI / 180;
+        const rotatedX = relativeX * Math.cos(rotationRad) - relativeY * Math.sin(rotationRad);
+        const rotatedY = relativeX * Math.sin(rotationRad) + relativeY * Math.cos(rotationRad);
 
-        // 3. Convert to plane coordinates
+        // Apply overall scale
+        const scaledX = rotatedX * this.engine.config.quality;
+        const scaledY = rotatedY * this.engine.config.quality;
+
+        // Convert to plane coordinates
         const rect = this.engine.canvas.getBoundingClientRect();
-        const screenX = scaledX * (rect.width / this.engine.canvas.width) + rect.left;
-        const screenY = scaledY * (rect.height / this.engine.canvas.height) + rect.top;
+        const screenX = scaledX * (rect.width / this.engine.canvas.width) + rect.left + (rect.width / 2);
+        const screenY = scaledY * (rect.height / this.engine.canvas.height) + rect.top + (rect.height / 2);
 
         return {x: screenX, y: screenY};
     }

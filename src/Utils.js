@@ -3,11 +3,59 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-
 import Collision from "./Collision.js";
 
 class Utils {
 
+    /** ======== RESIZE ======== */
+    resize (width, height) {
+        this._updateCanvasSize(width, height);
+        return this;
+    }
+    _handleResize () {
+        const width = this.canvas.offsetWidth;
+        const height = this.canvas.offsetHeight;
+        this._updateCanvasSize(width, height);
+    }
+    _updateCanvasSize (width, height) {
+        // Update the base dimensions
+        this.baseWidth = width;
+        this.baseHeight = height;
+
+        // Update config dimensions
+        this.config.width = width;
+        this.config.height = height;
+
+        // Update canvas physical size (considering quality)
+        this.canvas.width = width * this.config.quality;
+        this.canvas.height = height * this.config.quality;
+
+        // Update canvas display size
+        this.canvas.style.width = width + 'px';
+        this.canvas.style.height = height + 'px';
+
+        // Reset context scale
+        this.ctx.scale(this.config.quality, this.config.quality);
+
+        this.workerSend({
+            action: 'update_canvas',
+            props: {
+                attributes: {
+                    width: this.canvas.width,
+                    height: this.canvas.height,
+                },
+                style: this.canvas.style
+            }
+        });
+
+        // Trigger resize event
+        this.trigger('resize', {
+            width: width,
+            height: height
+        });
+    }
+
+    /** ======== ENTITIES ======== */
     getSortedEntitiesForInteraction () {
         const entities = [];
         let globalIndex = 0;
@@ -83,31 +131,8 @@ class Utils {
         }
     }
 
-    _handleResize () {
-        // Update canvas physical size
-        this.canvas.width = this.canvas.offsetWidth * this.config.quality;
-        this.canvas.height = this.canvas.offsetHeight * this.config.quality;
-
-        // Update size in config
-        this.config.width = this.canvas.offsetWidth;
-        this.config.height = this.canvas.offsetHeight;
-
-        // Update base sizes
-        this.baseWidth = this.config.width;
-        this.baseHeight = this.config.height;
-
-        // Reset context scale
-        this.ctx.scale(this.config.quality, this.config.quality);
-
-        // Emit resize event to notify components
-        this.trigger('resize', {
-            width: this.config.width,
-            height: this.config.height
-        });
-    }
-
     /** ======== TOUCHES ======== */
-    handleTouchStart (e) {
+    _handleTouchStart (e) {
         if (!this.running) return;
 
         for (const touch of e.changedTouches) {
@@ -148,22 +173,21 @@ class Utils {
                 });
                 targetEntity.zIndex = maxZIndex + 1;
 
-                this.draggedEntities.set(identifier, {
-                    entity: targetEntity,
-                    touchStartX: worldCoords.x,
-                    touchStartY: worldCoords.y,
-                    dragStartX: worldCoords.x - targetEntity.absoluteX,
-                    dragStartY: worldCoords.y - targetEntity.absoluteY
-                });
-
                 if (targetEntity.isDraggable()) {
+                    this.draggedEntities.set(identifier, {
+                        entity: targetEntity,
+                        touchStartX: worldCoords.x,
+                        touchStartY: worldCoords.y,
+                        dragStartX: worldCoords.x - targetEntity.absoluteX,
+                        dragStartY: worldCoords.y - targetEntity.absoluteY
+                    });
                     targetEntity.trigger('drag', eventData);
                 }
             }
         }
     }
-    handleTouchMove (e) {
-        e.preventDefault();
+    _handleTouchMove (e) {
+        e?.preventDefault?.();
         if (!this.running) return;
 
         for (const touch of e.changedTouches) {
@@ -211,7 +235,7 @@ class Utils {
             entity.trigger('dragMove', eventData);
         }
     }
-    handleTouchEnd (e) {
+    _handleTouchEnd (e) {
         if (!this.running) return;
 
         for (const touch of e.changedTouches) {
@@ -237,13 +261,12 @@ class Utils {
                 const deltaY = Math.abs(worldCoords.y - draggedData.touchStartY);
                 const wasDragged = deltaX > 5 || deltaY > 5;
 
-                if (entity.isDraggable()) {
+                if (entity.isDraggable())
                     entity.trigger('drop', eventData);
-                }
 
-                if (!wasDragged && entity.isClickable()) {
-                    entity.trigger('click', eventData);
-                }
+                // if (!wasDragged && entity.isClickable()) {
+                //     entity.trigger('click', eventData);
+                // }
 
                 this.draggedEntities.delete(identifier);
             }
@@ -251,12 +274,79 @@ class Utils {
             this.trigger('touchend', eventData);
         }
     }
-    handleTouchCancel (e) {
+    _handleTouchCancel (e) {
         this.handleTouchEnd(e);
     }
 
     /** ======== MOUSE ======== */
-    handleMouseMove (e) {
+    _handleMouseDown (e) {
+        if (!this.running || e.buttons === 2) return;
+
+        const worldCoords = this.camera.screenToWorld(e.clientX, e.clientY);
+        const eventData = {
+            x: worldCoords.x,
+            y: worldCoords.y,
+            worldX: worldCoords.x,
+            worldY: worldCoords.y,
+            screenX: e.clientX,
+            screenY: e.clientY,
+            timestamp: Date.now()
+        };
+
+        this.trigger('mousedown', eventData);
+
+        if (this.physicsEnabled) return;
+
+        const sortedEntities = this.getSortedEntitiesForInteraction();
+        const targetEntity = sortedEntities.find(entity =>
+            this.isPointInEntity(worldCoords.x, worldCoords.y, entity) &&
+            entity.isDraggable()
+        );
+
+        if (targetEntity) {
+            this.draggedEntity = targetEntity;
+
+            this.entities.forEach(entity => {
+                if (entity.zIndex > targetEntity.zIndex) {
+                    entity.zIndex--;
+                }
+            });
+
+            let maxZIndex = 0;
+            this.entities.forEach(entity => {
+                maxZIndex = Math.max(maxZIndex, entity.zIndex || 0);
+            });
+            targetEntity.zIndex = maxZIndex + 1;
+
+            this.draggedEntity.dragStartX = worldCoords.x - targetEntity.absoluteX;
+            this.draggedEntity.dragStartY = worldCoords.y - targetEntity.absoluteY;
+            targetEntity.trigger('drag', eventData);
+        }
+    }
+    _handleMouseUp (e) {
+        if (!this.running || e.buttons === 2) return;
+
+        const worldCoords = this.camera.screenToWorld(e.clientX, e.clientY);
+        const eventData = {
+            x: worldCoords.x,
+            y: worldCoords.y,
+            worldX: worldCoords.x,
+            worldY: worldCoords.y,
+            screenX: e.clientX,
+            screenY: e.clientY,
+            timestamp: Date.now()
+        };
+
+        this.trigger('mouseup', eventData);
+
+        if (this.physicsEnabled) return;
+
+        if (this.draggedEntity) {
+            this.draggedEntity.trigger('drop', eventData);
+            this.draggedEntity = null;
+        }
+    }
+    _handleMouseMove (e) {
         if (!this.running || e.buttons === 2) return;
 
         const worldCoords = this.camera.screenToWorld(e.clientX, e.clientY);
@@ -317,85 +407,18 @@ class Utils {
             }
         }
     }
-    handleMouseDown (e) {
-        if (!this.running || e.buttons === 2) return;
-
-        const worldCoords = this.camera.screenToWorld(e.clientX, e.clientY);
-        const eventData = {
-            x: worldCoords.x,
-            y: worldCoords.y,
-            worldX: worldCoords.x,
-            worldY: worldCoords.y,
-            screenX: e.clientX,
-            screenY: e.clientY,
-            timestamp: Date.now()
-        };
-
-        this.trigger('mousedown', eventData);
-
-        if (this.physicsEnabled) return;
-
-        const sortedEntities = this.getSortedEntitiesForInteraction();
-        const targetEntity = sortedEntities.find(entity =>
-            this.isPointInEntity(worldCoords.x, worldCoords.y, entity) &&
-            entity.isDraggable()
-        );
-
-        if (targetEntity) {
-            this.draggedEntity = targetEntity;
-
-            this.entities.forEach(entity => {
-                if (entity.zIndex > targetEntity.zIndex) {
-                    entity.zIndex--;
-                }
-            });
-
-            let maxZIndex = 0;
-            this.entities.forEach(entity => {
-                maxZIndex = Math.max(maxZIndex, entity.zIndex || 0);
-            });
-            targetEntity.zIndex = maxZIndex + 1;
-
-            this.draggedEntity.dragStartX = worldCoords.x - targetEntity.absoluteX;
-            this.draggedEntity.dragStartY = worldCoords.y - targetEntity.absoluteY;
-            targetEntity.trigger('drag', eventData);
-        }
-    }
-    handleMouseUp (e) {
-        if (!this.running || e.buttons === 2) return;
-
-        const worldCoords = this.camera.screenToWorld(e.clientX, e.clientY);
-        const eventData = {
-            x: worldCoords.x,
-            y: worldCoords.y,
-            worldX: worldCoords.x,
-            worldY: worldCoords.y,
-            screenX: e.clientX,
-            screenY: e.clientY,
-            timestamp: Date.now()
-        };
-
-        this.trigger('mouseup', eventData);
-
-        if (this.physicsEnabled) return;
-
-        if (this.draggedEntity) {
-            this.draggedEntity.trigger('drop', eventData);
-            this.draggedEntity = null;
-        }
-    }
 
     /** ======== CLICK ======== */
-    handleClick (e) {
+    _handleClick (e) {
         if (e.button === 2) return;
-        this._handleClick(e, 'click');
+        this._handleClicks(e, 'click');
     }
-    handleRightClick (e) {
-        this._handleClick(e, 'rightclick');
+    _handleRightClick (e) {
+        this._handleClicks(e, 'rightclick');
     }
-    _handleClick (e, trigger) {
-        e.preventDefault();
-        setTimeout(() => this.canvas.focus(), 0);
+    _handleClicks (e, trigger) {
+        e?.preventDefault?.();
+        setTimeout(() => this.canvas?.focus?.(), 0);
 
         if (!this.running) return;
 
@@ -457,8 +480,8 @@ class Utils {
             return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b);
         });
     }
-    handleKeyDown (e) {
-        e.preventDefault();
+    _handleKeyDown (e) {
+        e?.preventDefault?.();
 
         const key = this.#normalizeKey(e.key);
         this.pressedKeys.add(key);
@@ -468,8 +491,8 @@ class Utils {
         this.trigger('keydown', combo, e);
         this.trigger(combo, combo, e);
     }
-    handleKeyUp (e) {
-        e.preventDefault();
+    _handleKeyUp (e) {
+        e?.preventDefault?.();
 
         const key = this.#normalizeKey(e.key);
         this.pressedKeys.delete(key);
@@ -634,7 +657,7 @@ class Utils {
     }
     /** ======== END ======== */
 
-    dataURLToBlob (dataURL) {
+    static dataURLToBlob (dataURL) {
         const arr = dataURL.split(',');
         const mime = arr[0].match(/:(.*?);/)[1];
         const bstr = atob(arr[1]);
@@ -646,6 +669,37 @@ class Utils {
         }
 
         return new Blob([u8arr], {type: mime});
+    }
+
+    async wait (...args) {
+        if (args.length === 0)
+            return [];
+
+        const promises = this._flattenPromises(args);
+
+        if (promises.length === 0)
+            return [];
+
+        try {
+            return await Promise.all(promises);
+        } catch (error) {
+            throw new Error(`Wait operation failed: ${error.message}`);
+        }
+    }
+    _flattenPromises (args) {
+        const promises = [];
+
+        for (const arg of args) {
+            if (Array.isArray(arg)) {
+                promises.push(...this._flattenPromises(arg));
+            } else if (arg && typeof arg.then === 'function') {
+                promises.push(arg);
+            } else if (arg !== null && arg !== undefined) {
+                promises.push(Promise.resolve(arg));
+            }
+        }
+
+        return promises;
     }
 
 }

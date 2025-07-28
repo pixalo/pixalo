@@ -3,445 +3,816 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-
 class AudioManager {
 
-    #spatialRelations;
-
-    constructor (engine) {
-        this.engine = engine;
-        this.context = null;
-        this.masterGain = null;
-        this.initialized = false;
-        this.#spatialRelations = new Map();
-        this.pendingPlayRequests = new Map();
-
-        // Audio Settings
-        this.masterVolume = 1;
-        this.categoryVolumes = new Map();
-        this.muted = false;
-
-        // Audio Instances
-        /**
-         * Map<string, Array<{
-         *   source: AudioBufferSourceNode,
-         *   gainNode: GainNode,
-         *   panNode: StereoPannerNode|null,
-         *   category: string,
-         *   spatialPosition: [number, number],
-         *   maxInstances: number,
-         *   fadeInTime: number,
-         *   fadeOutTime: number,
-         *   playing: boolean,
-         *   startTime: number,
-         *   pausedAt: number|null,
-         *   options: object
-         * }>>
-         */
+    constructor (worker_id) {
+        this.assets = new Map();
+        this.workerID = worker_id;
+        this.isWorker = typeof importScripts !== 'undefined' && typeof DedicatedWorkerGlobalScope !== 'undefined';
         this.instances = new Map();
+        this.assetInstances = new Map(); // Track instances by asset ID for faster lookup
+        this.listener = null;
+        this.masterVolume = 1;
+        this.nextInstanceId = 0;
 
-        // Categories
-        this.categoryNodes = new Map();
-        this.categories = ['master', 'music', 'sfx', 'voice'];
-
-        this.#initialize();
-    }
-
-    async #initialize () {
-        if (this.initialized) return true;
-        try {
-            if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') {
-                this.engine.warn('Web Audio API is not supported in this environment');
-                return false;
+        if (!this.isWorker) {
+            try {
+                this.context = new (window.AudioContext || window.webkitAudioContext)();
+                this.listener = this.context.listener;
+                this._initSpatialAudio();
+            } catch (e) {
+                this.error(e)
             }
-            this.context = new (window.AudioContext || window.webkitAudioContext)();
-            this.masterGain = this.context.createGain();
-            this.masterGain.gain.value = this.masterVolume;
-            this.masterGain.connect(this.context.destination);
-            this.#initializeCategories();
-
-            if (typeof document !== 'undefined') {
-                await this.#waitForUserInteraction();
-            }
-            this.initialized = true;
-            return true;
-        } catch (error) {
-            this.engine.error('Failed to initialize AudioManager:', error);
-            return false;
         }
     }
 
-    #initializeCategories () {
-        this.categories.forEach(category => {
-            const gainNode = this.context.createGain();
-            gainNode.gain.value = 1;
-            gainNode.connect(this.masterGain);
-            this.categoryNodes.set(category, gainNode);
-            this.categoryVolumes.set(category, 1);
-        });
-    }
+    async load (id, src, config) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_load', args: [id, src, config]});
+            return;
+        }
 
-    async #waitForUserInteraction () {
-        return new Promise(resolve => {
-            const resumeOnInteraction = async () => {
-                await this.context.resume();
-                ['click', 'touchstart', 'keydown'].forEach(event => {
-                    document.removeEventListener(event, resumeOnInteraction);
+        return new Promise(async (resolve, reject) => {
+            try {
+                const response = await fetch(src, {
+                    mode: 'cors', ...(config.fetch || {})
                 });
-                resolve();
-            };
-            ['click', 'touchstart', 'keydown'].forEach(event => {
-                document.addEventListener(event, resumeOnInteraction);
-            });
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
+
+                const assetObject = {
+                    id,
+                    asset: audioBuffer,
+                    config: {
+                        ...config,
+                        volume: config.volume || 1,
+                        loop: config.loop || false,
+                        autoplay: config.autoplay || false,
+                        muted: config.muted || false
+                    }
+                };
+
+                this.assets.set(id, assetObject);
+
+                if (this.isWorker)
+                    this._sendWorker({...assetObject, asset: null, type: 'pixalo_audio_loaded'});
+                else if (this?.worker)
+                    this.worker.postMessage({...assetObject, asset: null, type: 'pixalo_audio_loaded'});
+
+                resolve({asset: audioBuffer, config: assetObject.config});
+            } catch (e) {
+                reject(new Error(`Failed to load audio: ${e.message}`));
+            }
         });
-    }
-
-    #createAudioInstance (assetBuffer, options = {}) {
-        const source = this.context.createBufferSource();
-        source.buffer = assetBuffer;
-        source.loop = options.loop ?? false;
-        source.playbackRate.value = options.playbackRate || 1;
-
-        const gainNode = this.context.createGain();
-        gainNode.gain.value = (options.volume !== undefined ? options.volume : 1);
-
-        const panNode = this.context.createStereoPanner ? this.context.createStereoPanner() : null;
-        if (panNode) {
-            panNode.pan.value = 0;
-            source.connect(gainNode);
-            gainNode.connect(panNode);
-        } else {
-            source.connect(gainNode);
-        }
-
-        const category = options.category || 'master';
-        const categoryNode = this.categoryNodes.get(category);
-        if (panNode) {
-            panNode.connect(categoryNode || this.masterGain);
-        } else {
-            gainNode.connect(categoryNode || this.masterGain);
-        }
-
-        return {
-            source,
-            gainNode,
-            panNode,
-            category,
-            spatialPosition: options.position || [0, 0],
-            maxInstances: options.maxInstances || 1,
-            fadeInTime: options.fadeIn || 0,
-            fadeOutTime: options.fadeOut || 0,
-            playing: false,
-            startTime: 0,
-            pausedAt: null,
-            options: {...options}
-        };
-    }
-
-    _update () {
-        this.#updateSpatialPositions();
-    }
-
-    async startPlayback () {
-        if (!this.initialized) {
-            const success = await this.#initialize();
-            if (!success) return;
-        }
-        for (const [id, {options, asset}] of this.pendingPlayRequests) {
-            await this.play(id, options);
-        }
-        this.pendingPlayRequests.clear();
     }
 
     /** ======== CONTROLS ======== */
     async play (id, options = {}) {
-        const asset = this.engine.getAsset(id);
-        if (!asset || asset.type !== 'audio') return null;
-
-        if (!this.initialized) {
-            this.pendingPlayRequests.set(id, {options, asset});
-            return null;
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_play', args: [id, options]});
+            return;
         }
 
-        // Check maxInstances logic: if exceeded, do not play new
-        const instances = this.instances.get(id) || [];
-        const maxInstances = options.maxInstances || asset.config?.maxInstances || 1;
-        const playingCount = instances.filter(inst => inst.playing).length;
-        if (playingCount >= maxInstances) {
-            return null;
-        }
-
-        // Create instance
-        const instance = this.#createAudioInstance(asset.asset, {...asset.config, ...options});
-
-        // Fade-in support
-        if (instance.fadeInTime > 0) {
-            instance.gainNode.gain.setValueAtTime(0, this.context.currentTime);
-            instance.gainNode.gain.linearRampToValueAtTime(
-                options.volume || asset.config.volume || 1,
-                this.context.currentTime + instance.fadeInTime / 1000
-            );
-        }
-
-        instance.source.onended = () => {
-            instance.playing = false;
-        };
-
-        // Start from beginning (or resume if previously paused)
-        instance.source.start(0);
-        instance.playing = true;
-        instance.startTime = this.context.currentTime;
-        instance.pausedAt = null;
-
-        // Add to instances if not present
-        instances.push(instance);
-        this.instances.set(id, instances);
-
-        return instance;
-    }
-    stop (id) {
-        const instances = this.instances.get(id);
-        if (!instances) return;
-        instances.forEach(instance => {
-            if (instance.playing) {
-                if (instance.fadeOutTime > 0) {
-                    instance.gainNode.gain.linearRampToValueAtTime(
-                        0,
-                        this.context.currentTime + instance.fadeOutTime / 1000
-                    );
-                    setTimeout(() => {
-                        try {
-                            instance.source.stop();
-                        } catch {
-                        }
-                        instance.playing = false;
-                        instance.pausedAt = null;
-                    }, instance.fadeOutTime);
-                } else {
-                    try {
-                        instance.source.stop();
-                    } catch {
-                    }
-                    instance.playing = false;
-                    instance.pausedAt = null;
+        return new Promise((resolve, reject) => {
+            try {
+                const assetObject = this.assets.get(id);
+                if (!assetObject) {
+                    reject(new Error(`Audio asset with id '${id}' not found`));
+                    return;
                 }
+
+                if (this.context.state === 'suspended') {
+                    this.context.resume();
+                }
+
+                const instanceId = this._generateInstanceId();
+                const source = this.context.createBufferSource();
+                const gainNode = this.context.createGain();
+
+                source.buffer = assetObject.asset;
+                const config = {...assetObject.config, ...options};
+                gainNode.gain.value = config.muted ? 0 : (config.volume * this.masterVolume);
+                source.loop = config.loop;
+
+                const spatialNodes = this._setupAudioChain(source, gainNode, config.spatial);
+
+                const instanceData = {
+                    instanceId,
+                    assetId: id,
+                    source,
+                    gainNode,
+                    spatialNodes,
+                    spatialConfig: config.spatial || null,
+                    startTime: this.context.currentTime,
+                    pauseTime: 0,
+                    duration: assetObject.asset.duration,
+                    isPlaying: true,
+                    isPaused: false,
+                    config
+                };
+
+                this.instances.set(instanceId, instanceData);
+
+                // Track instance by asset ID for faster lookup
+                if (!this.assetInstances.has(id)) {
+                    this.assetInstances.set(id, new Set());
+                }
+                this.assetInstances.get(id).add(instanceId);
+
+                source.onended = () => {
+                    this.instances.delete(instanceId);
+                    if (this.assetInstances.has(id)) {
+                        this.assetInstances.get(id).delete(instanceId);
+                        if (this.assetInstances.get(id).size === 0) {
+                            this.assetInstances.delete(id);
+                        }
+                    }
+                };
+
+                source.start(0);
+
+                resolve({instanceId, assetId: id, source, gainNode, spatialNodes});
+
+            } catch (e) {
+                this.error(`Failed to play audio '${id}':`, e.message);
+                reject(new Error(`Failed to play audio: ${e.message}`));
             }
         });
     }
     pause (id) {
-        const instances = this.instances.get(id);
-        if (!instances) return;
-        instances.forEach(instance => {
-            if (instance.playing) {
-                try {
-                    instance.source.stop();
-                } catch {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_pause', args: [id]});
+            return this;
+        }
+
+        // Check if it's an instanceId first
+        let instance = this.instances.get(id);
+
+        // If not found, check if it's an assetId and pause the first active instance
+        if (!instance) {
+            for (const [instanceId, instanceData] of this.instances) {
+                if (instanceData.assetId === id && instanceData.isPlaying && !instanceData.isPaused) {
+                    instance = instanceData;
+                    id = instanceId; // Update id to instanceId for further processing
+                    break;
                 }
-                instance.pausedAt = this.context.currentTime - instance.startTime;
-                instance.playing = false;
             }
-        });
+        }
+
+        if (instance && instance.isPlaying && !instance.isPaused) {
+            const currentTime = this.getCurrentTime(id);
+
+            instance.pauseTime = currentTime;
+            instance.isPlaying = false;
+            instance.isPaused = true;
+
+            try {
+                instance.source.onended = null;
+                instance.source.stop();
+            } catch (e) {
+                this.warn('Source already stopped:', e.message);
+            }
+        } else {
+            this.warn(`No active audio instance found for id '${id}' or already paused`);
+        }
+
+        return this;
     }
     resume (id) {
-        const asset = this.engine.getAsset(id);
-        const instances = this.instances.get(id);
-        if (!asset || !instances) return;
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_resume', args: [id]});
+            return this;
+        }
 
-        instances.forEach((instance, idx) => {
-            if (!instance.playing && instance.pausedAt != null) {
-                // Create new source node and resume from pausedAt
-                const newInstance = this.#createAudioInstance(asset.asset, {
-                    ...asset.config,
-                    ...instance.options
-                });
-                newInstance.source.onended = () => {
-                    newInstance.playing = false;
-                };
-                try {
-                    newInstance.source.start(0, instance.pausedAt);
-                } catch {
+        let instance = this.instances.get(id);
+        let instanceId = id;
+
+        if (!instance) {
+            const assetInstanceIds = this.assetInstances.get(id);
+            if (assetInstanceIds) {
+                for (const iId of assetInstanceIds) {
+                    const instanceData = this.instances.get(iId);
+                    if (instanceData && instanceData.isPaused) {
+                        instance = instanceData;
+                        instanceId = iId;
+                        break;
+                    }
                 }
-                newInstance.playing = true;
-                newInstance.startTime = this.context.currentTime - instance.pausedAt;
-                newInstance.pausedAt = null;
-
-                // Replace old instance with new one (preserve array order)
-                instances[idx] = newInstance;
             }
-        });
-        this.instances.set(id, instances);
+        }
+
+        if (instance && instance.isPaused) {
+            const assetObject = this.assets.get(instance.assetId);
+            if (!assetObject) {
+                this.warn(`Asset not found for instance '${instanceId}'`);
+                return this;
+            }
+
+            if (this.context.state === 'suspended')
+                this.context.resume();
+
+            const source = this.context.createBufferSource();
+            const gainNode = this.context.createGain();
+
+            source.buffer = assetObject.asset;
+            source.loop = instance.config.loop;
+            gainNode.gain.value = instance.config.volume * this.masterVolume;
+
+            const spatialNodes = this._setupAudioChain(source, gainNode, instance.spatialConfig);
+
+            instance.source = source;
+            instance.gainNode = gainNode;
+            instance.spatialNodes = spatialNodes;
+            instance.startTime = this.context.currentTime - instance.pauseTime;
+            instance.isPlaying = true;
+            instance.isPaused = false;
+
+            source.onended = () => {
+                this.instances.delete(instanceId);
+                if (this.assetInstances.has(instance.assetId)) {
+                    this.assetInstances.get(instance.assetId).delete(instanceId);
+                    if (this.assetInstances.get(instance.assetId).size === 0) {
+                        this.assetInstances.delete(instance.assetId);
+                    }
+                }
+            };
+
+            const remainingDuration = assetObject.asset.duration - instance.pauseTime;
+            if (remainingDuration > 0) {
+                source.start(0, instance.pauseTime);
+            } else {
+                source.start(0, 0);
+            }
+        } else {
+            this.warn(`No paused audio instance found for id '${id}'`);
+        }
+
+        return this;
+    }
+    stop (id) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_stop', args: [id]});
+            return this;
+        }
+
+        // Check if it's an instanceId first
+        let instance = this.instances.get(id);
+        let instanceId = id;
+
+        // If not found, check if it's an assetId and stop the first active instance
+        if (!instance) {
+            for (const [iId, instanceData] of this.instances) {
+                if (instanceData.assetId === id) {
+                    instance = instanceData;
+                    instanceId = iId;
+                    break;
+                }
+            }
+        }
+
+        instance = this.instances.get(instanceId);
+        if (instance) {
+            try {
+                instance.source.onended = null;
+                instance.source.stop();
+            } catch (e) {
+                this.warn('Error stopping source:', e.message);
+            }
+            this.instances.delete(instanceId);
+            if (this.assetInstances.has(instance.assetId)) {
+                this.assetInstances.get(instance.assetId).delete(instanceId);
+                if (this.assetInstances.get(instance.assetId).size === 0) {
+                    this.assetInstances.delete(instance.assetId);
+                }
+            }
+        }
+
+        return this;
+    }
+    stopAsset (assetId) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_stopAsset', args: [assetId]});
+            return this;
+        }
+
+        const assetInstanceIds = this.assetInstances.get(assetId);
+        if (assetInstanceIds) {
+            const instancesToStop = Array.from(assetInstanceIds);
+            instancesToStop.forEach(instanceId => this.stop(instanceId));
+        }
+
+        return this;
     }
     /** ======== END ======== */
 
     /** ======== VOLUME ======== */
     setVolume (id, volume) {
-        if (volume > 1)
-            return;
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_setVolume', args: [id, volume]});
+            return this;
+        }
 
-        const instances = this.instances.get(id);
-        if (!instances) return;
+        // Check if it's an instanceId first
+        let instance = this.instances.get(id);
 
-        instances.forEach(instance => {
-            instance.gainNode.gain.value = volume;
-            instance.options.volume = volume;
+        if (instance) {
+            // It's an instanceId
+            instance.gainNode.gain.value = volume * this.masterVolume;
+            instance.config.volume = volume;
+        } else {
+            // Check if it's an assetId and set volume for the first instance
+            for (const instanceData of this.instances.values()) {
+                if (instanceData.assetId === id) {
+                    instanceData.gainNode.gain.value = volume * this.masterVolume;
+                    instanceData.config.volume = volume;
+                    break;
+                }
+            }
+        }
+
+        return this;
+    }
+    setAssetVolume (assetId, volume) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_setAssetVolume', args: [assetId, volume]});
+            return this;
+        }
+
+        this.instances.forEach((instance) => {
+            if (instance.assetId === assetId) {
+                instance.gainNode.gain.value = volume * this.masterVolume;
+                instance.config.volume = volume;
+            }
         });
+
+        const assetObject = this.assets.get(assetId);
+        if (assetObject) {
+            assetObject.config.volume = volume;
+        }
+
+        return this;
     }
     setMasterVolume (volume) {
-        this.masterVolume = volume;
-        this.masterGain.gain.value = volume;
-    }
-    setCategoryVolume (category, volume) {
-        const node = this.categoryNodes.get(category);
-        if (node) {
-            this.categoryVolumes.set(category, volume);
-            node.gain.value = volume;
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_setMasterVolume', args: [volume]});
+            return this;
         }
+
+        this.masterVolume = Math.max(0, Math.min(1, volume));
+
+        this.instances.forEach((instance) => {
+            if (!instance.config.muted) {
+                instance.gainNode.gain.value = instance.config.volume * this.masterVolume;
+            }
+        });
+
+        return this;
     }
     /** ======== END ======== */
 
     /** ======== SPATIAL ======== */
-    setSpatialPosition (id, position) {
-        const instances = this.instances.get(id);
-        if (!instances) return;
-        instances.forEach(instance => this.updateSpatialPosition(instance, position));
+    setListenerPosition (x, y, z = 0) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_setListenerPosition', args: [x, y, z]});
+            return this;
+        }
+
+        if (this.listener.positionX) {
+            this.listener.positionX.value = x;
+            this.listener.positionY.value = y;
+            this.listener.positionZ.value = z;
+        } else {
+            this.listener.setPosition(x, y, z);
+        }
+
+        return this;
     }
-    updateSpatialPosition (instance, [x, y]) {
-        if (!instance.panNode) return;
+    setListenerOrientation (forwardX, forwardY, forwardZ = 0, upX = 0, upY = 1, upZ = 0) {
+        if (this.isWorker) {
+            this._sendWorker({
+                action: 'audio_setListenerOrientation',
+                args: [forwardX, forwardY, forwardZ, upX, upY, upZ]
+            });
+            return this;
+        }
 
-        const screenWidth = this.engine.baseWidth;
-        const screenHeight = this.engine.baseHeight;
-        const normalizedX = (x / screenWidth) * 2 - 1;
+        if (this.listener.forwardX) {
+            this.listener.forwardX.value = forwardX;
+            this.listener.forwardY.value = forwardY;
+            this.listener.forwardZ.value = forwardZ;
+            this.listener.upX.value = upX;
+            this.listener.upY.value = upY;
+            this.listener.upZ.value = upZ;
+        } else {
+            this.listener.setOrientation(forwardX, forwardY, forwardZ, upX, upY, upZ);
+        }
 
-        instance.panNode.pan.value = Math.max(-1, Math.min(1, normalizedX));
-
-        const centerX = screenWidth / 2;
-        const centerY = screenHeight / 2;
-        const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
-        const maxDistance = Math.sqrt((screenWidth / 2) ** 2 + (screenHeight / 2) ** 2);
-        const volume = 1 - (distance / maxDistance);
-
-        instance.gainNode.gain.value = Math.max(0, Math.min(1, volume));
+        return this;
     }
-    setSpatialRelation (id, entity1, entity2, options = {}) {
-        if (!this.engine.isEntity(entity1) || !this.engine.isEntity(entity2))
-            throw new Error('entity1 and entity2 must be instances of Entity');
+    setSpatialPosition (id, x, y, z = 0) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_setSpatialPosition', args: [id, x, y, z]});
+            return this;
+        }
 
-        this.#spatialRelations.set(id, {
-            entity1, entity2, options
-        });
-    }
-    #updateSpatialPositions () {
-        this.#spatialRelations.forEach((item, id) => {
-            const {maxDistance = 400, curve} = item.options;
-            const [x1, y1] = [item.entity1.absoluteX, item.entity1.absoluteY];
-            const [x2, y2] = [item.entity2.absoluteX, item.entity2.absoluteY];
+        // Check if it's an instanceId first
+        let instance = this.instances.get(id);
 
-            // Calculating Euclidean distance
-            const distance = Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
-
-            // Calculating sound volume based on distance
-            let volume;
-            if (distance >= maxDistance) {
-                volume = 0;
-            } else {
-                // If the user has a curved function
-                if (typeof curve === "function") {
-                    volume = curve(distance / maxDistance);
-                } else {
-                    // Default: 2nd degree curve
-                    volume = 1 - (distance / maxDistance);
-                    volume = volume * volume;
+        // If not found, check if it's an assetId and update the first spatial instance
+        if (!instance) {
+            for (const instanceData of this.instances.values()) {
+                if (instanceData.assetId === id && instanceData.spatialNodes && instanceData.spatialNodes.panner) {
+                    instance = instanceData;
+                    break;
                 }
             }
+        }
 
-            // Setting spatial position and volume
-            this.setSpatialPosition(id, [x2, y2]);
-            this.setVolume(id, volume);
-        });
+        if (instance && instance.spatialNodes && instance.spatialNodes.panner) {
+            if (instance.spatialNodes.panner.positionX) {
+                instance.spatialNodes.panner.positionX.value = x;
+                instance.spatialNodes.panner.positionY.value = y;
+                instance.spatialNodes.panner.positionZ.value = z;
+            } else {
+                instance.spatialNodes.panner.setPosition(x, y, z);
+            }
+        } else {
+            this.warn(`No spatial audio found for id '${id}'`);
+        }
+
+        return this;
+    }
+    setSpatialOrientation (id, x, y, z = 0) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_setSpatialOrientation', args: [id, x, y, z]});
+            return this;
+        }
+
+        // Check if it's an instanceId first
+        let instance = this.instances.get(id);
+
+        // If not found, check if it's an assetId and update the first spatial instance
+        if (!instance) {
+            for (const instanceData of this.instances.values()) {
+                if (instanceData.assetId === id && instanceData.spatialNodes && instanceData.spatialNodes.panner) {
+                    instance = instanceData;
+                    break;
+                }
+            }
+        }
+
+        if (instance && instance.spatialNodes && instance.spatialNodes.panner) {
+            if (instance.spatialNodes.panner.orientationX) {
+                instance.spatialNodes.panner.orientationX.value = x;
+                instance.spatialNodes.panner.orientationY.value = y;
+                instance.spatialNodes.panner.orientationZ.value = z;
+            } else {
+                instance.spatialNodes.panner.setOrientation(x, y, z);
+            }
+        } else {
+            this.warn(`No spatial audio found for id '${id}'`);
+        }
+
+        return this;
+    }
+    playSpatial (assetId, x, y, z = 0, options = {}) {
+        const spatialOptions = {
+            ...options,
+            spatial: {
+                position: {x, y, z},
+                panningModel: 'HRTF',
+                distanceModel: 'inverse',
+                refDistance: 1,
+                maxDistance: 10000,
+                rolloffFactor: 1,
+                ...options.spatial
+            }
+        };
+        return this.play(assetId, spatialOptions);
+    }
+    updateSpatial (id, config) {
+        if (config.position)
+            this.setSpatialPosition(id, config.position.x, config.position.y, config.position.z);
+
+        if (config.orientation)
+            this.setSpatialOrientation(id, config.orientation.x, config.orientation.y, config.orientation.z);
+
+        if (config.volume !== undefined)
+            this.setVolume(id, config.volume);
+
+        return this;
     }
     /** ======== END ======== */
 
     /** ======== STATUS ======== */
     isPlaying (id) {
-        const instances = this.instances.get(id);
-        return instances?.some(instance => instance.playing) ?? false;
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_isPlaying', args: [id]});
+            return false;
+        }
+
+        // Check if it's an instanceId first
+        let instance = this.instances.get(id);
+
+        // If not found, check if it's an assetId
+        if (!instance) {
+            for (const instanceData of this.instances.values()) {
+                if (instanceData.assetId === id && instanceData.isPlaying) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        return instance ? instance.isPlaying : false;
     }
-    getDuration (id) {
-        const asset = this.engine.getAsset(id);
-        return asset?.asset.duration ?? 0;
+    getAssetInstances (assetId) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_getAssetInstances', args: [assetId]});
+            return [];
+        }
+
+        const instances = [];
+        const assetInstanceIds = this.assetInstances.get(assetId);
+        if (assetInstanceIds) {
+            for (const instanceId of assetInstanceIds) {
+                const instance = this.instances.get(instanceId);
+                if (instance) {
+                    instances.push({
+                        instanceId,
+                        isPlaying: instance.isPlaying,
+                        isPaused: instance.isPaused,
+                        currentTime: this.getCurrentTime(instanceId)
+                    });
+                }
+            }
+        }
+        return instances;
+    }
+    getDuration (assetId) {
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_getDuration', args: [assetId]});
+            return 0;
+        }
+
+        const assetObject = this.assets.get(assetId);
+        return assetObject ? assetObject.asset.duration : 0;
     }
     getCurrentTime (id) {
-        const instances = this.instances.get(id);
-        if (!instances || !instances[0] || !instances[0].playing) return 0;
-        return this.context.currentTime - instances[0].startTime;
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_getCurrentTime', args: [id]});
+            return 0;
+        }
+
+        // Check if it's an instanceId first
+        let instance = this.instances.get(id);
+
+        // If not found, check if it's an assetId and get the first instance
+        if (!instance) {
+            for (const instanceData of this.instances.values()) {
+                if (instanceData.assetId === id) {
+                    instance = instanceData;
+                    break;
+                }
+            }
+        }
+
+        if (!instance) return 0;
+
+        if (instance.isPaused) {
+            return instance.pauseTime;
+        } else if (instance.isPlaying) {
+            const elapsed = this.context.currentTime - instance.startTime;
+            return Math.min(elapsed, instance.duration);
+        }
+
+        return 0;
     }
-    getState () {
-        return {
-            initialized: this.initialized,
-            contextState: this.context?.state || 'not created',
-            masterVolume: this.masterVolume,
-            muted: this.muted,
-            activeInstances: Array.from(this.instances.entries()).map(([id, instances]) => ({
-                id,
-                count: instances.length,
-                playing: instances.some(i => i.playing)
-            }))
-        };
+    getDistance (id) {
+        // Check if it's an instanceId first
+        let instance = this.instances.get(id);
+
+        // If not found, check if it's an assetId and get the first spatial instance
+        if (!instance) {
+            for (const instanceData of this.instances.values()) {
+                if (instanceData.assetId === id && instanceData.spatialNodes && instanceData.spatialNodes.panner) {
+                    instance = instanceData;
+                    break;
+                }
+            }
+        }
+
+        if (!instance || !instance.spatialNodes || !instance.spatialNodes.panner) return null;
+
+        const panner = instance.spatialNodes.panner;
+        const listener = this.listener;
+
+        let px, py, pz, lx, ly, lz;
+
+        if (panner.positionX) {
+            px = panner.positionX.value;
+            py = panner.positionY.value;
+            pz = panner.positionZ.value;
+            lx = listener.positionX.value;
+            ly = listener.positionY.value;
+            lz = listener.positionZ.value;
+        } else {
+            return null;
+        }
+
+        return Math.sqrt(
+            Math.pow(px - lx, 2) +
+            Math.pow(py - ly, 2) +
+            Math.pow(pz - lz, 2)
+        );
     }
     /** ======== END ======== */
 
     /** ======== BATCH OPERATION ======== */
     muteAll () {
-        this.muted = true;
-        this.masterGain.gain.value = 0;
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_muteAll', args: []});
+            return this;
+        }
+
+        this.instances.forEach((instance) => {
+            instance.gainNode.gain.value = 0;
+        });
+        return this;
     }
     unmuteAll () {
-        this.muted = false;
-        this.masterGain.gain.value = this.masterVolume;
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_unmuteAll', args: []});
+            return this;
+        }
+
+        this.instances.forEach((instance) => {
+            instance.gainNode.gain.value = instance.config.volume * this.masterVolume;
+        });
+        return this;
     }
     pauseAll () {
-        for (const [id] of this.instances) {
-            this.pause(id);
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_pauseAll', args: []});
+            return this;
         }
+
+        const activeInstances = Array.from(this.instances.keys()).filter(instanceId => {
+            const instance = this.instances.get(instanceId);
+            return instance.isPlaying && !instance.isPaused;
+        });
+        activeInstances.forEach(instanceId => this.pause(instanceId));
+
+        return this;
     }
     resumeAll () {
-        for (const [id] of this.instances) {
-            this.resume(id);
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_resumeAll', args: []});
+            return this;
         }
+
+        const pausedInstances = Array.from(this.instances.keys()).filter(instanceId => {
+            const instance = this.instances.get(instanceId);
+            return instance.isPaused;
+        });
+        pausedInstances.forEach(instanceId => this.resume(instanceId));
+
+        return this;
     }
     stopAll () {
-        for (const [id] of this.instances) {
-            this.stop(id);
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_stopAll', args: []});
+            return this;
         }
+
+        this.instances.forEach((instance) => {
+            try {
+                instance.source.stop();
+            } catch (e) {
+                // Source might already be stopped
+            }
+        });
+
+        this.instances.clear();
+        this.assetInstances.clear();
+
+        return this;
     }
     /** ======== END ======== */
 
     /** ======== CLEANUP ======== */
     cleanup () {
-        this.instances.forEach(instances => {
-            instances.forEach(instance => {
-                try {
-                    instance.source.stop();
-                    instance.gainNode.disconnect();
-                    if (instance.panNode) instance.panNode.disconnect();
-                } catch {}
-            });
-        });
+        if (this.isWorker) {
+            this._sendWorker({action: 'audio_cleanup', args: []});
+            return this;
+        }
+
+        this.stopAll();
+        this.assets.clear();
+
+        if (this.context && this.context.state !== 'closed')
+            this.context.close();
 
         this.instances.clear();
-        this.categoryNodes.forEach(node => node.disconnect());
-        this.categoryNodes.clear();
-        this.#spatialRelations.clear();
+        this.listener = null;
+        this.masterVolume = 1;
+        this.nextInstanceId = 0;
 
-        try {
-            if (this.masterGain)
-                this.masterGain.disconnect();
+        return this;
+    }
+    /** ======== END ======== */
 
-            if (this.context)
-                this.context.close();
-        } catch (e) {
-            this.engine.error('Failed to cleanup', e.message);
+    /** ======== LOGS ======== */
+    warn (...args) {
+        console.warn('%c[AudioManager WARN]', 'color: #ff9800;', ...args);
+        return this;
+    }
+    error (...args) {
+        console.error('%c[AudioManager ERROR]', 'color: #f44336;', ...args);
+        return this;
+    }
+    /** ======== END ======== */
+
+    /** ======== PRIVATE METHODS ======== */
+    _handleWorker (event) {
+        let {data} = event;
+        const action = data?.action ?? '';
+
+        if (action.startsWith('audio_')) {
+            const callback = action.replace('audio_', '');
+            if (typeof this[callback] === 'function')
+                this[callback](...data.args);
         }
+    }
+    _sendWorker (data) {
+        postMessage({
+            wid: this.workerID,
+            ...data
+        });
+    }
+    _initSpatialAudio () {
+        if (this.listener.forwardX) {
+            this.listener.forwardX.value = 0;
+            this.listener.forwardY.value = 0;
+            this.listener.forwardZ.value = -1;
+            this.listener.upX.value = 0;
+            this.listener.upY.value = 1;
+            this.listener.upZ.value = 0;
+            this.listener.positionX.value = 0;
+            this.listener.positionY.value = 0;
+            this.listener.positionZ.value = 0;
+        } else {
+            this.listener.setOrientation(0, 0, -1, 0, 1, 0);
+            this.listener.setPosition(0, 0, 0);
+        }
+    }
+    _generateInstanceId () {
+        return `instance_${this.nextInstanceId++}_${performance.now().toString(36)}`;
+    }
+    _setupAudioChain (source, gainNode, spatialConfig) {
+        if (spatialConfig) {
+            const spatialNodes = this._createSpatialNodes(spatialConfig);
+            source.connect(gainNode);
+            gainNode.connect(spatialNodes.panner);
+            spatialNodes.panner.connect(this.context.destination);
+            return spatialNodes;
+        } else {
+            source.connect(gainNode);
+            gainNode.connect(this.context.destination);
+            return null;
+        }
+    }
+    _createSpatialNodes (spatialConfig) {
+        const panner = this.context.createPanner();
+
+        panner.panningModel = spatialConfig.panningModel || 'HRTF';
+        panner.distanceModel = spatialConfig.distanceModel || 'inverse';
+        panner.refDistance = spatialConfig.refDistance || 1;
+        panner.maxDistance = spatialConfig.maxDistance || 10000;
+        panner.rolloffFactor = spatialConfig.rolloffFactor || 1;
+        panner.coneInnerAngle = spatialConfig.coneInnerAngle || 360;
+        panner.coneOuterAngle = spatialConfig.coneOuterAngle || 360;
+        panner.coneOuterGain = spatialConfig.coneOuterGain || 0;
+
+        const pos = spatialConfig.position || {x: 0, y: 0, z: 0};
+        if (panner.positionX) {
+            panner.positionX.value = pos.x;
+            panner.positionY.value = pos.y;
+            panner.positionZ.value = pos.z;
+        } else {
+            panner.setPosition(pos.x, pos.y, pos.z);
+        }
+
+        const orient = spatialConfig.orientation || {x: 1, y: 0, z: 0};
+        if (panner.orientationX) {
+            panner.orientationX.value = orient.x;
+            panner.orientationY.value = orient.y;
+            panner.orientationZ.value = orient.z;
+        } else {
+            panner.setOrientation(orient.x, orient.y, orient.z);
+        }
+
+        return {panner};
     }
     /** ======== END ======== */
 

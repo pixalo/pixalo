@@ -14,6 +14,9 @@ class Entity {
         this.width = config.width || 32;
         this.height = config.height || 32;
 
+        this.class = config.class || '';
+
+        this._data = {};
         this.parent = null;
         this.children = new Map();
         this.absoluteX = this.x;
@@ -73,8 +76,11 @@ class Entity {
         this.collision = {
             enabled: Boolean(config.collision),
             group  : config.collision?.group  || `group_${id}`,
-            bounds : config.collision?.bounds || 'auto',
-            points : config.collision?.points || null
+            width  : config.collision?.width  || this.width,
+            height : config.collision?.height || this.height,
+            points : config.collision?.points || config.points || null,
+            x: config.collision?.x || 0,
+            y: config.collision?.y || 0
         };
         this.physics = config.physics ?? false;
 
@@ -106,34 +112,8 @@ class Entity {
 
         if (this.sprite && this.sprite.defaultAnimation)
             this.play(this.sprite.defaultAnimation);
-    }
 
-    #normalizeBackground (config = {}) {
-        const background = {};
-
-        background.backgroundColor = config.fill ?? config.backgroundColor;
-        background.backgroundGradient = config.gradient ?? config.backgroundGradient;
-
-        let imageConfig = config.image ?? config.backgroundImage;
-
-        if (typeof imageConfig === 'string') {
-            background.backgroundImage = this.#getAssetImage(imageConfig);
-            background.backgroundImageFit = config.backgroundImageFit || 'contain';
-            background.backgroundImagePosition = config.backgroundImagePosition || 'center';
-            background.backgroundImageRepeat = config.backgroundImageRepeat || false;
-        } else if (typeof imageConfig === 'object' && (imageConfig?.asset || imageConfig?.src)) {
-            background.backgroundImage = imageConfig?.asset || this.#getAssetImage(imageConfig.src);
-            background.backgroundImageFit = imageConfig.fit || 'contain';
-            background.backgroundImagePosition = imageConfig.position || 'center';
-            background.backgroundImageRepeat = imageConfig.repeat || false;
-        }
-
-        return background;
-    }
-    #getAssetImage (id) {
-        if (typeof id === 'object' && id?.asset)
-            return id.asset;
-        return this.engine.getAsset?.(id)?.asset;
+        this.moveAnimation = null;
     }
 
     /** ======== EVENTS ======== */
@@ -156,16 +136,35 @@ class Entity {
         this.eventListeners.get(eventName).add(callback);
         return this;
     }
-    off (eventName, callback) {
+    one (eventName, callback) {
         if (Array.isArray(eventName)) {
             eventName.forEach(event => {
-                this.on(event, callback);
+                this.one(event, callback);
             });
             return this;
         }
-        if (this.eventListeners.has(eventName)) {
-            this.eventListeners.get(eventName).delete(callback);
+
+        if (typeof eventName === 'object') {
+            for (const key in eventName)
+                this.one(key, eventName[key]);
+            return this;
         }
+
+        const onceWrapper = (data) => {
+            callback.call(this, data);
+            this.off(eventName, onceWrapper);
+        };
+
+        this.on(eventName, onceWrapper);
+        return this;
+    }
+    off (eventName, callback) {
+        if (Array.isArray(eventName)) {
+            eventName.forEach(event => this.off(event, callback));
+            return this;
+        }
+        if (this.eventListeners.has(eventName))
+            this.eventListeners.get(eventName).delete(callback);
         return this;
     }
     trigger (eventName, ...args) {
@@ -248,6 +247,11 @@ class Entity {
     find (childId) {
         return this.children.get(childId);
     }
+    findByClass (className) {
+        return Array.from(this.children).filter(
+            ([key, value]) => value.class.split(' ').includes(className)
+        ).map(([key, value]) => value);
+    }
     getEntities () {
         const entities = [this];
 
@@ -266,8 +270,11 @@ class Entity {
         const config = {
             x: this.x,
             y: this.y,
+            absoluteX: this.absoluteX,
+            absoluteY: this.absoluteY,
             width: this.width,
             height: this.height,
+            _data: this._data,
             engine: this.engine,
             constrainToParent: this.constrainToParent,
             zIndex: this.zIndex,
@@ -323,6 +330,15 @@ class Entity {
             clone.styles.mask = this.styles.mask.clone();
         }
 
+        if (this.styles.backgroundImage) {
+            clone.style({
+                backgroundImage: this.styles.backgroundImage,
+                backgroundImageFit: this.styles.backgroundImageFit,
+                backgroundImagePosition: this.styles.backgroundImagePosition,
+                backgroundImageRepeat: this.styles.backgroundImageRepeat
+            });
+        }
+
         // Clone children recursively
         this.children.forEach((child, childId) => {
             const childClone = child.clone();
@@ -371,7 +387,7 @@ class Entity {
 
         const startTime = performance.now() + options.delay;
 
-        let ease = typeof options.easing === 'function' ? options.easing : this.engine.Ease[options.easing] || this.engine.Ease['linear'];
+        let ease = typeof options.easing === 'function' ? options.easing : (this.engine.Ease[options.easing] ?? this.engine.Ease['linear']);
 
         const animate = (currentTime) => {
             if (currentTime < startTime) {
@@ -382,8 +398,8 @@ class Entity {
             const elapsed = currentTime - startTime;
             if (elapsed >= options.duration) {
                 this.style(properties);
-                if (typeof options.complete === 'function') {
-                    options.complete.call(this);
+                if (typeof options.onComplete === 'function') {
+                    options.onComplete.call(this);
                 }
                 return;
             }
@@ -505,6 +521,8 @@ class Entity {
         });
     }
     move (options, y = 0, duration = 0) {
+        this.halt();
+
         if (typeof options === 'number') {
             options = {
                 x: options,
@@ -571,6 +589,7 @@ class Entity {
                     config.onComplete.call(this);
                 }
 
+                this.moveAnimation = null;
                 return;
             }
 
@@ -601,10 +620,10 @@ class Entity {
             if (config.onUpdate)
                 config.onUpdate.call(this, eased);
 
-            requestAnimationFrame(animate);
+            this.moveAnimation = requestAnimationFrame(animate);
         };
 
-        requestAnimationFrame(animate);
+        this.moveAnimation = requestAnimationFrame(animate);
 
         return this;
     }
@@ -613,6 +632,23 @@ class Entity {
     }
     show () {
         this.style('visible', true);
+    }
+    data (key, value) {
+        if (value === undefined)
+            return this._data[key] || undefined;
+        this._data[key] = value;
+        return this;
+    }
+    halt () {
+        if (this.moveAnimation) {
+            cancelAnimationFrame(this.moveAnimation);
+            this.moveAnimation = null;
+            this.trigger('moveStop', {x: this.x, y: this.y});
+        }
+        return this;
+    }
+    addClass (className) {
+        this.class += ` ${className}`
     }
 
     /** ======== SpriteSheet ======== */
@@ -631,7 +667,7 @@ class Entity {
         this.sprite.playing = true;
         this.sprite.lastFrameUpdate = performance.now();
 
-        // trigger events و callbacks
+        // trigger events callbacks
         this.trigger('animationStart', animationName);
         animation.onStart?.call(this);
 
@@ -1381,12 +1417,13 @@ class Entity {
 
         return this;
     }
+
     getBounds () {
         const bounds = {
-            x: this.absoluteX,
-            y: this.absoluteY,
-            width: this.width * Math.abs(this.styles.scaleX * this.styles.scale),
-            height: this.height * Math.abs(this.styles.scaleY * this.styles.scale)
+            x: this.absoluteX + this.collision.x,
+            y: this.absoluteY + this.collision.y,
+            width: this.collision.width * Math.abs(this.styles.scaleX * this.styles.scale),
+            height: this.collision.height * Math.abs(this.styles.scaleY * this.styles.scale)
         };
 
         // If we had a rotation
@@ -1519,6 +1556,12 @@ class Entity {
     _renderCollisionShape (ctx) {
         ctx.save();
 
+        // Calculate offset for collision box
+        const offsetX = (-this.width / 2) + this.collision.x + (this.collision.width / 2);
+        const offsetY = (-this.height / 2) + this.collision.y + (this.collision.height / 2);
+
+        ctx.translate(offsetX, offsetY);
+
         const originalStyles = {...this.styles};
 
         const debugStyles = {
@@ -1528,16 +1571,18 @@ class Entity {
             color: 'rgba(255, 0, 0, 0.3)'
         };
 
-        Object.assign(this.styles, {
-            backgroundColor: 'transparent',
-            borderColor: 'rgba(255, 255, 255, 0.8)',
-            borderWidth: 2
-        });
-        this.renderShape(ctx);
+        // Temporarily change width and height for collision box
+        const originalWidth = this.width;
+        const originalHeight = this.height;
+        this.width = this.collision.width;
+        this.height = this.collision.height;
 
         Object.assign(this.styles, debugStyles);
         this.renderShape(ctx);
 
+        // Restore original dimensions
+        this.width = originalWidth;
+        this.height = originalHeight;
         this.styles = originalStyles;
 
         ctx.restore();
@@ -1579,6 +1624,34 @@ class Entity {
         this.engine = null;
 
         return true;
+    }
+
+    #normalizeBackground (config = {}) {
+        const background = {};
+
+        background.backgroundColor = config.fill ?? config.backgroundColor;
+        background.backgroundGradient = config.gradient ?? config.backgroundGradient;
+
+        let imageConfig = config.image ?? config.backgroundImage;
+
+        if (typeof imageConfig === 'string') {
+            background.backgroundImage = this.#getAssetImage(imageConfig);
+            background.backgroundImageFit = config.backgroundImageFit || 'contain';
+            background.backgroundImagePosition = config.backgroundImagePosition || 'center';
+            background.backgroundImageRepeat = config.backgroundImageRepeat || false;
+        } else if (typeof imageConfig === 'object' && (imageConfig?.asset || imageConfig?.src)) {
+            background.backgroundImage = imageConfig?.asset || this.#getAssetImage(imageConfig.src);
+            background.backgroundImageFit = imageConfig.fit || 'contain';
+            background.backgroundImagePosition = imageConfig.position || 'center';
+            background.backgroundImageRepeat = imageConfig.repeat || false;
+        }
+
+        return background;
+    }
+    #getAssetImage (id) {
+        if (typeof id === 'object' && id?.asset)
+            return id.asset;
+        return this.engine.getAsset?.(id)?.asset;
     }
 
 }

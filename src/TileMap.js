@@ -42,7 +42,7 @@ class TileMap {
         this.layers = this.parseLayers(layersConfig);
 
         // Starting tile animations
-        this.initializeTileAnimations({tiles: this.tiles});
+        this._initializeTileAnimations({tiles: this.tiles});
 
         return {
             layers: this.layers,
@@ -51,7 +51,7 @@ class TileMap {
     }
 
     /** ======== COLLISIONS ======== */
-    checkCollisions (entity) {
+    _checkCollisions (entity) {
         if (!entity.collision?.enabled) return;
 
         // Maintain previous position for platform collision
@@ -79,9 +79,8 @@ class TileMap {
                 for (const tile of tilesAtPoint) {
                     if (!tile.config.collision) continue;
 
-                    const collisionResult = this.checkTileCollision(
-                        entity,
-                        tile,
+                    const collisionResult = this._checkTileCollision(
+                        entity, tile,
                         x * tileSize,
                         y * tileSize
                     );
@@ -100,7 +99,6 @@ class TileMap {
                                     y: y * tileSize
                                 };
                                 break;
-
                             case 'platform':
                                 if (collisionResult.side === 'bottom') {
                                     // Apply position on the platform
@@ -113,10 +111,7 @@ class TileMap {
 
                         // Register a new encounter
                         newCollisions.set(collisionKey, {
-                            entity,
-                            tile,
-                            x,
-                            y,
+                            entity, tile, x, y,
                             layer: tile.layer,
                             time: performance.now(),
                             side: collisionResult.side,
@@ -124,8 +119,7 @@ class TileMap {
                         });
 
                         // Execute new collision or change direction callback
-                        if ((!this.activeCollisions.has(collisionKey) ||
-                                this.activeCollisions.get(collisionKey).side !== collisionResult.side) &&
+                        if ((!this.activeCollisions.has(collisionKey) || this.activeCollisions.get(collisionKey).side !== collisionResult.side) &&
                             tile.config.collision.onCollide) {
 
                             tile.config.collision.onCollide({
@@ -191,7 +185,7 @@ class TileMap {
         // Update active collision list
         this.activeCollisions = newCollisions;
     }
-    checkTileCollision (entity, tile, tileX, tileY) {
+    _checkTileCollision (entity, tile, tileX, tileY) {
         const bounds = tile.config.collision.bounds || [0, 0, this.defaultTileSize, this.defaultTileSize];
 
         // Tile range
@@ -230,7 +224,7 @@ class TileMap {
 
             case 'trigger':
                 // Only collision detection without preventing movement
-                const overlap = this.getOverlap(entityRect, tileRect);
+                const overlap = this._getOverlap(entityRect, tileRect);
                 if (overlap.collides) {
                     return {
                         ...overlap,
@@ -242,10 +236,10 @@ class TileMap {
             case 'solid':
             default:
                 // Complete collision from all directions
-                return this.getOverlap(entityRect, tileRect);
+                return this._getOverlap(entityRect, tileRect);
         }
     }
-    getOverlap (rect1, rect2) {
+    _getOverlap (rect1, rect2) {
         // General collision review
         const hasCollisionX = rect1.x + rect1.width > rect2.x && rect1.x < rect2.x + rect2.width;
         const hasCollisionY = rect1.y + rect1.height > rect2.y && rect1.y < rect2.y + rect2.height;
@@ -288,14 +282,14 @@ class TileMap {
         // Collision checking for all active entities
         for (const [_, entity] of this.engine.entities) {
             if (entity.collision?.enabled) {
-                this.checkCollisions(entity);
+                this._checkCollisions(entity);
             }
         }
 
         // Tile animation update
-        this.updateAnimatedTiles();
+        this._updateAnimatedTiles();
     }
-    updateAnimatedTiles () {
+    _updateAnimatedTiles () {
         const currentTime = performance.now();
 
         for (const [key, animData] of this.animatedTiles) {
@@ -364,20 +358,20 @@ class TileMap {
 
                     if (tileConfig.parts) {
                         // Rendering a composite tile with all its components
-                        this.renderCompositeTile(ctx, {...tileConfig, symbol}, x, y, tileSize, overlap);
+                        this._renderCompositeTile(ctx, {...tileConfig, symbol}, x, y, tileSize, overlap);
                     } else {
                         // Simple tile rendering
-                        this.renderSingleTile(ctx, {...tileConfig, symbol}, x, y, tileSize, overlap);
+                        this._renderSingleTile(ctx, {...tileConfig, symbol}, x, y, tileSize, overlap);
                     }
 
                     if (this.engine.debugger?.active && tileConfig.collision) {
-                        this.renderTileDebug(ctx, tileConfig, x, y, tileSize);
+                        this._renderTileDebug(ctx, tileConfig, x, y, tileSize);
                     }
                 }
             }
         }
     }
-    renderTileDebug (ctx, tileConfig, x, y, tileSize) {
+    _renderTileDebug (ctx, tileConfig, x, y, tileSize) {
         ctx.save();
 
         const bounds = tileConfig.collision.bounds || [0, 0, tileSize, tileSize];
@@ -428,9 +422,9 @@ class TileMap {
 
         ctx.restore();
     }
-    renderCompositeTile (ctx, tileConfig, baseX, baseY, tileSize, overlap) {
+    _renderCompositeTile (ctx, tileConfig, baseX, baseY, tileSize, overlap) {
         // Original tile rendering
-        this.renderSingleTile(ctx, {...tileConfig, symbol: tileConfig.symbol}, baseX, baseY, tileSize, overlap);
+        this._renderSingleTile(ctx, {...tileConfig, symbol: tileConfig.symbol}, baseX, baseY, tileSize, overlap);
 
         // Render additional components
         for (const part of tileConfig.parts) {
@@ -439,15 +433,15 @@ class TileMap {
             const x = baseX + offsetX;
             const y = baseY + offsetY;
 
-            this.renderSingleTile(ctx, part.tile, x, y, tileSize, overlap);
+            this._renderSingleTile(ctx, part.tile, x, y, tileSize, overlap);
 
             // Debug rendering for each part if it has a collision
             if (this.engine.debugger?.active && part.collision) {
-                this.renderTileDebug(ctx, part, x, y, tileSize);
+                this._renderTileDebug(ctx, part, x, y, tileSize);
             }
         }
     }
-    renderSingleTile (ctx, tileConfig, x, y, tileSize, overlap) {
+    _renderSingleTile (ctx, tileConfig, x, y, tileSize, overlap) {
         let tileReference = typeof tileConfig === 'string' ? tileConfig : tileConfig.tile;
 
         // Tile animation review
@@ -486,7 +480,7 @@ class TileMap {
     /** ======== END ======== */
 
     /** ======== ANIMATION FRAMES ======== */
-    initializeTileAnimations (tilemap) {
+    _initializeTileAnimations (tilemap) {
         // Starting animations for tiles that have frames
         for (const [symbol, tileConfig] of tilemap.tiles) {
             if (tileConfig.frames && tileConfig.frames.length > 1) {
@@ -555,8 +549,8 @@ class TileMap {
         // Add tile at specified position
         grid[y][x] = symbol;
 
-        this.engine.log(`Added tile '${symbol}' to layer '${layer}' at position (${x}, ${y})`);
-        return true;
+        this.engine.info(`Added tile '${symbol}' to layer '${layer}' at position (${x}, ${y})`);
+        return this;
     }
     getTileInfo (tileReference) {
         if (typeof tileReference === 'string') {

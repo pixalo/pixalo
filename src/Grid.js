@@ -38,7 +38,6 @@ class Grid {
         this.originY = config.originY || 0;
     }
 
-
     /** ======== RENDER ======== */
     render (ctx) {
         if (!this.enabled) return;
@@ -152,7 +151,6 @@ class Grid {
     }
     /** ======== END ======== */
 
-
     /** ======== SNAPS, GRID, CELLS ======== */
     snapToGrid (x, y) {
         const snappedX = Math.round((x - this.originX) / this.width) * this.width + this.originX;
@@ -171,7 +169,6 @@ class Grid {
         };
     }
     /** ======== END ======== */
-
 
     /** ======== CONFIGURATIONS ======== */
     setEnabled (enabled) {

@@ -10,26 +10,6 @@ class Particle {
         this.reset();
     }
 
-    reset () {
-        this.x = 0;
-        this.y = 0;
-        this.vx = 0;
-        this.vy = 0;
-        this.ax = 0;
-        this.ay = 0;
-        this.size = 1;
-        this.currentSize = 1;
-        this.startColor = '#ffffff';
-        this.endColor = '#000000';
-        this.startAlpha = 1;
-        this.endAlpha = 0;
-        this.rotation = 0;
-        this.rotationSpeed = 0;
-        this.lifetime = 1000;
-        this.age = 0;
-        this.texture = null;
-    }
-
     init (config) {
         this.x = config.x;
         this.y = config.y;
@@ -48,28 +28,6 @@ class Particle {
         this.lifetime = config.lifetime;
         this.age = 0;
         this.texture = config.texture;
-    }
-
-    update (deltaTime) {
-        const dt = deltaTime / 1000; // Convert to seconds
-
-        // Update velocity
-        this.vx += this.ax * dt;
-        this.vy += this.ay * dt;
-
-        // Update position
-        this.x += this.vx * dt;
-        this.y += this.vy * dt;
-
-        // Update rotation
-        this.rotation += this.rotationSpeed * dt;
-
-        // Update age
-        this.age += deltaTime;
-    }
-
-    isDead () {
-        return this.age >= this.lifetime;
     }
 
     render (ctx) {
@@ -99,6 +57,48 @@ class Particle {
         }
 
         ctx.restore();
+    }
+
+    update (deltaTime) {
+        const dt = deltaTime / 1000; // Convert to seconds
+
+        // Update velocity
+        this.vx += this.ax * dt;
+        this.vy += this.ay * dt;
+
+        // Update position
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+
+        // Update rotation
+        this.rotation += this.rotationSpeed * dt;
+
+        // Update age
+        this.age += deltaTime;
+    }
+
+    reset () {
+        this.x = 0;
+        this.y = 0;
+        this.vx = 0;
+        this.vy = 0;
+        this.ax = 0;
+        this.ay = 0;
+        this.size = 1;
+        this.currentSize = 1;
+        this.startColor = '#ffffff';
+        this.endColor = '#000000';
+        this.startAlpha = 1;
+        this.endAlpha = 0;
+        this.rotation = 0;
+        this.rotationSpeed = 0;
+        this.lifetime = 1000;
+        this.age = 0;
+        this.texture = null;
+    }
+
+    isDead () {
+        return this.age >= this.lifetime;
     }
 
     interpolateColor (color1, color2, progress) {

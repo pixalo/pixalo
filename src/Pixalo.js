@@ -3,7 +3,6 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-
 import Utils from "./Utils.js";
 import Bezier from "./Bezier.js";
 import Ease from "./Ease.js";
@@ -22,26 +21,48 @@ class Pixalo extends Utils {
     constructor (selector, config = {}) {
         super();
 
+        selector = selector || {};
+        config.worker = typeof DedicatedWorkerGlobalScope !== 'undefined';
+
         if (typeof selector === 'string') {
             this.canvas = document.querySelector(selector);
-        } else if (selector instanceof HTMLCanvasElement) {
+        } else if (typeof HTMLCanvasElement !== 'undefined' && selector instanceof HTMLCanvasElement) {
             this.canvas = selector;
+        } else if (typeof selector === 'object') {
+            config = {...selector, ...config};
         } else {
             throw new Error('Invalid selector');
         }
 
-        this.ctx = this.canvas.getContext('2d');
+        this.eventListeners = new Map();
         this.assets = new Map();
+        this.timers = new Map();
+
+        this.#init(config);
+    }
+
+    async #init (config, run = false) {
+        if (config?.worker && !run)
+            return this.#setupWorker(config);
+
+        this.ctx = this.canvas.getContext('2d');
         this.entities = new Map();
+        this.window = {
+            width : config?.window?.width  || (typeof window !== 'undefined' ? window.innerWidth  : 0),
+            height: config?.window?.height || (typeof window !== 'undefined' ? window.innerHeight : 0),
+            devicePixelRatio: config?.window?.devicePixelRatio || (typeof window !== 'undefined' ? window.devicePixelRatio : 0)
+        };
         this.config = {
-            width: config.width || this.canvas.width,
-            height: config.height || this.canvas.height,
+            worker: config.worker || false,
+            width : config.width  || (this.canvas.width || 0),
+            height: config.height || (this.canvas.height || 0),
             fps: config.fps || 60,
-            grids: config.grids || false,
-            quality: config.quality || 1,
+            grid: config.grid || false,
+            quality: config.quality || this.window.devicePixelRatio,
             physics: config.physics || {},
             collision: config.collision || {},
             background: config.background || '#ffffff',
+            resizeTarget: config.resizeTarget || false,
         };
         this.baseWidth = this.config.width;
         this.baseHeight = this.config.height;
@@ -58,20 +79,18 @@ class Pixalo extends Utils {
             targetFrameCount: 0
         };
 
-        this.eventListeners = new Map();
         this.running = false;
         this.lastTime = 0;
         this.draggedEntity = null;
         this.draggedEntities = new Map();
         this.hoveredEntity = null;
-        this.timers = new Map();
 
         this.background = new Background(this);
 
         this.camera = new Camera(this, config.camera);
 
-        this.gridEnabled = Boolean(config.grids);
-        this.grid = new Grid(this, config.grids || {});
+        this.gridEnabled = Boolean(config.grid);
+        this.grid = new Grid(this, config.grid || {});
 
         this.physicsEnabled = Boolean(config.physics);
         this.physics = new Physics(this, config.physics);
@@ -84,35 +103,87 @@ class Pixalo extends Utils {
 
         this.emitters = new Emitters(this);
 
-        this.audio = new AudioManager(this);
+        this.audio = new AudioManager(this.config.worker);
 
         this.animations = {};
         this.maxDeltaTime = 1000 / 30;
 
-        this.init();
-        this.setupEventListeners();
+        const canvasConfig = {
+            // Canvas attributes
+            attributes: {
+                tabIndex: 0,
+                width: this.config.width * this.config.quality,
+                height: this.config.height * this.config.quality
+            },
+
+            // Canvas style properties
+            style: {
+                width: this.config.width + 'px',
+                height: this.config.height + 'px',
+                outline: 'none',
+                backgroundColor: this.config.background,
+                imageRendering: this.config.imageRendering || this.canvas?.style?.imageRendering
+            }
+        };
+
+        if (!this.canvas?.style)
+            this.canvas.style = {};
+
+        // Apply canvas attributes
+        Object.assign(this.canvas, canvasConfig.attributes);
+        Object.assign(this.canvas.style, canvasConfig.style);
+
+        this.workerSend({
+            action: 'update_canvas',
+            props : canvasConfig
+        });
+
+        // Setup auto resize if target specified
+        if (this.config.resizeTarget) {
+            this.workerSend({
+                action: 'set_resize_target',
+                target: this.config.resizeTarget
+            });
+        }
+
+        this._setupEventListeners();
+
+        this.trigger('ready');
+    }
+    #setupWorker (config) {
+        if (typeof DedicatedWorkerGlobalScope === 'undefined')
+            throw new Error('Please run Pixalo in the Worker environment.');
+
+        onmessage = event => this.trigger('worker_msg', event);
+        onerror = event => this.trigger('worker_err', event);
+
+        this.one('worker_msg', msg => {
+            const data = msg.data;
+
+            config.worker = data.wid;
+            config.window = {
+                ...config.window,
+                ...data.window
+            };
+            this.canvas = data.canvas;
+
+            this.#init(config, true);
+            this.workerSend({
+                wid: config.worker,
+                action: 'ready'
+            });
+
+            this.on('worker_msg', this.audio._handleWorker);
+        });
     }
 
-    init () {
-        this.canvas.tabIndex = 0;
-
-        // Setting the physical size of the canvas
-        this.canvas.width = this.config.width * this.config.quality;
-        this.canvas.height = this.config.height * this.config.quality;
-
-        // Setting the canvas display size
-        this.canvas.style.width = this.config.width + 'px';
-        this.canvas.style.height = this.config.height + 'px';
-
-        // Setting the background color
-        this.canvas.style.backgroundColor = this.config.background;
-
-        // Improved rendering quality for pixel games
-        this.canvas.style.imageRendering = this.config.imageRendering || this.canvas.style.imageRendering;
-    }
-
-    setupEventListeners () {
+    _setupEventListeners () {
         if (typeof window === 'undefined' || typeof document === 'undefined') {
+            if (this.config.worker) {
+                this.on('worker_msg', this._workerEventListeners);
+                return;
+            }
+
             this.warn('Browser environment is required. This feature is only available in browser context.');
             return;
         }
@@ -120,10 +191,23 @@ class Pixalo extends Utils {
         // Start observing canvas size changes
         new ResizeObserver(this._handleResize.bind(this)).observe(this.canvas);
 
-        this.canvas.addEventListener('click', this.handleClick.bind(this));
-        this.canvas.addEventListener('contextmenu', this.handleRightClick.bind(this));
-        this.canvas.addEventListener('keydown', this.handleKeyDown.bind(this));
-        this.canvas.addEventListener('keyup', this.handleKeyUp.bind(this));
+        // Setup auto resize if target specified
+        const target = this.config.resizeTarget;
+        if (target === 'window') {
+            window.addEventListener('resize', () => {
+                this.resize(window.innerWidth, window.innerHeight);
+            });
+        } else if (target === 'document') {
+            window.addEventListener('resize', () => {
+                this.resize(document.documentElement.clientWidth, document.documentElement.clientHeight);
+            });
+        } else {
+            // It's a selector string
+            const element = document.querySelector(target);
+            if (element && ResizeObserver) {
+                new ResizeObserver(() => this._handleResize()).observe(element);
+            }
+        }
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden)
@@ -132,16 +216,101 @@ class Pixalo extends Utils {
             this.start();
         });
 
-        if (this.physicsEnabled)
-            return;
+        this.canvas.addEventListener('click', this._handleClick.bind(this));
+        this.canvas.addEventListener('contextmenu', this._handleRightClick.bind(this));
 
-        this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-        this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-        this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-        this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this));
-        this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this));
-        this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this));
-        this.canvas.addEventListener('touchcancel', this.handleTouchCancel.bind(this));
+        this.canvas.addEventListener('mousemove', this._handleMouseMove.bind(this));
+        this.canvas.addEventListener('mousedown', this._handleMouseDown.bind(this));
+        this.canvas.addEventListener('mouseup', this._handleMouseUp.bind(this));
+        this.canvas.addEventListener('touchstart', this._handleTouchStart.bind(this));
+        this.canvas.addEventListener('touchmove', this._handleTouchMove.bind(this));
+        this.canvas.addEventListener('touchend', this._handleTouchEnd.bind(this));
+        this.canvas.addEventListener('touchcancel', this._handleTouchCancel.bind(this));
+
+        this.canvas.addEventListener('keydown', this._handleKeyDown.bind(this));
+        this.canvas.addEventListener('keyup', this._handleKeyUp.bind(this));
+    }
+    _workerEventListeners (event) {
+        const data = event.data;
+
+        // Handle canvas events
+        if (data?.action === 'canvas_event') {
+            switch (data.event.type) {
+                case 'click':
+                    this._handleClick(data.event);
+                    break;
+                case 'contextmenu':
+                    this._handleRightClick(data.event);
+                    break;
+                case 'keydown':
+                    this._handleKeyDown(data.event);
+                    break;
+                case 'keyup':
+                    this._handleKeyUp(data.event);
+                    break;
+                case 'mousemove':
+                    this._handleMouseMove(data.event);
+                    break;
+                case 'mousedown':
+                    this._handleMouseDown(data.event);
+                    break;
+                case 'mouseup':
+                    this._handleMouseUp(data.event);
+                    break;
+                case 'touchstart':
+                    this._handleTouchStart(data.event);
+                    break;
+                case 'touchmove':
+                    this._handleTouchMove(data.event);
+                    break;
+                case 'touchend':
+                    this._handleTouchEnd(data.event);
+                    break;
+                case 'touchcancel':
+                    this._handleTouchCancel(data.event);
+                    break;
+            }
+            return;
+        }
+
+        // Handle visibility change
+        if (data?.action === 'visibility_change') {
+            if (data.hidden) {
+                this.stop();
+            } else {
+                this.start();
+            }
+            return;
+        }
+
+        // Handle Canvas BoundingClientRect
+        if (data?.action === 'boundingClientRect')
+            this.canvas.getBoundingClientRect = () => data.rect;
+
+        // Setup auto resize if target specified
+        if (data?.action === 'resizedTarget') {
+            this._updateCanvasSize(data.width, data.height);
+        }
+    }
+
+    async workerSend (data = {}, wait_for = null, callback = null) {
+        if (!this.config.worker) return this;
+        postMessage({
+            wid: this.config.worker,
+            ...data
+        });
+
+        if (wait_for && typeof callback === 'function') {
+            const _callback = event => {
+                if (event.data.action === wait_for) {
+                    callback(event);
+                    this.off('worker_msg', _callback);
+                }
+            };
+            this.on('worker_msg', _callback);
+        }
+
+        return this;
     }
 
     /** ======== QUALITY ======== */
@@ -185,6 +354,28 @@ class Pixalo extends Utils {
         this.eventListeners.get(eventName).add(callback);
         return this;
     }
+    one (eventName, callback) {
+        if (Array.isArray(eventName)) {
+            eventName.forEach(event => {
+                this.one(event, callback);
+            });
+            return this;
+        }
+
+        if (typeof eventName === 'object') {
+            for (const key in eventName)
+                this.one(key, eventName[key]);
+            return this;
+        }
+
+        const onceWrapper = (data) => {
+            callback.call(this, data);
+            this.off(eventName, onceWrapper);
+        };
+
+        this.on(eventName, onceWrapper);
+        return this;
+    }
     trigger (eventName, data) {
         if (Array.isArray(eventName)) {
             eventName.forEach(event => {
@@ -204,9 +395,7 @@ class Pixalo extends Utils {
     }
     off (eventName, callback) {
         if (Array.isArray(eventName)) {
-            eventName.forEach(event => {
-                this.off(event, callback);
-            });
+            eventName.forEach(event => this.off(event, callback));
             return this;
         }
         if (this.eventListeners.has(eventName))
@@ -257,6 +446,9 @@ class Pixalo extends Utils {
 
             timer.lastTime = timestamp;
         });
+    }
+    async delay (ms) {
+        return new Promise(resolve => this.timeout(resolve, ms));
     }
     /** ======== END ======== */
 
@@ -415,8 +607,6 @@ class Pixalo extends Utils {
 
         this.emitters.update(deltaTime);
 
-        this.audio._update();
-
         this.trigger('update', deltaTime);
     }
     render () {
@@ -474,6 +664,7 @@ class Pixalo extends Utils {
     }
     stop () {
         this.running = false;
+        this.pressedKeys.clear();
         this.timers.forEach(timer => {
             timer.isRunning = false;
         });
@@ -493,6 +684,7 @@ class Pixalo extends Utils {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
     reset () {
+        this.pressedKeys.clear();
         this.entities.clear();
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.eventListeners.clear();
@@ -621,10 +813,9 @@ class Pixalo extends Utils {
     /** ======== END ======== */
 
     /** ======== ASSETS ======== */
-    loadAsset (type, id, src, config = {}) {
-        if (!type || !id || !src) {
+    async loadAsset (type, id, src, config = {}) {
+        if (!type || !id || !src)
             return Promise.reject(new Error("Invalid parameters for Assets.load"));
-        }
 
         if (this.assets.has(id))
             return Promise.resolve(this.assets.get(id));
@@ -635,8 +826,15 @@ class Pixalo extends Utils {
             switch (type.toLowerCase()) {
                 case 'image':
                 case 'tiles':
-                    asset = new Image();
-                    asset.onload = () => {
+                    try {
+                        const response = await fetch(src);
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch image: ${response.statusText}`);
+                        }
+
+                        const blob = await response.blob();
+                        asset = await createImageBitmap(blob);
+
                         if (type.toLowerCase() === 'tiles') {
                             if (!config.tileSize) {
                                 this.warn('No tileSize specified for tiles');
@@ -669,14 +867,20 @@ class Pixalo extends Utils {
                         this.#applyAssetConfig(asset, config);
                         this.assets.set(id, {id, asset, config, type});
                         resolve({asset, config, type});
-                    };
-                    asset.onerror = reject;
-                    asset.src = src;
+                    } catch (error) {
+                        reject(new Error(`Failed to load image: ${error.message}`));
+                    }
                     break;
                 case 'spritesheet':
-                    asset = new Image();
+                    try {
+                        const response = await fetch(src);
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch spritesheet: ${response.statusText}`);
+                        }
 
-                    asset.onload = () => {
+                        const blob = await response.blob();
+                        asset = await createImageBitmap(blob);
+
                         // Validation of essential parameters
                         const requiredParams = ['columns', 'rows', 'width', 'height'];
                         for (const param of requiredParams) {
@@ -691,12 +895,10 @@ class Pixalo extends Utils {
                         config.margin = config.margin || [0, 0];
 
                         // Validating the structure of offset and margin arrays
-                        if (!Array.isArray(config.originOffset) || config.originOffset.length !== 2) {
+                        if (!Array.isArray(config.originOffset) || config.originOffset.length !== 2)
                             config.originOffset = [0, 0];
-                        }
-                        if (!Array.isArray(config.margin) || config.margin.length !== 2) {
+                        if (!Array.isArray(config.margin) || config.margin.length !== 2)
                             config.margin = [0, 0];
-                        }
 
                         // Calculate the total number of frames
                         config.totalFrames = config.columns * config.rows;
@@ -706,10 +908,8 @@ class Pixalo extends Utils {
                         for (let row = 0; row < config.rows; row++) {
                             for (let col = 0; col < config.columns; col++) {
                                 config.frames.push({
-                                    x: config.originOffset[0] +
-                                        col * (config.width + config.margin[0]),
-                                    y: config.originOffset[1] +
-                                        row * (config.height + config.margin[1]),
+                                    x: config.originOffset[0] + col * (config.width + config.margin[0]),
+                                    y: config.originOffset[1] + row * (config.height + config.margin[1]),
                                     width: config.width,
                                     height: config.height
                                 });
@@ -721,39 +921,22 @@ class Pixalo extends Utils {
 
                         // Announcing successful upload
                         resolve({asset, config, type});
-                    };
-
-                    asset.onerror = reject;
-
-                    asset.src = src;
+                    } catch (error) {
+                        reject(new Error(`Failed to load spritesheet: ${error.message}`));
+                    }
                     break;
                 case 'audio':
-                    try {
-                        const response = await fetch(src, {
-                            mode: 'cors', ...(config.fetch || {})
-                        });
-                        const arrayBuffer = await response.arrayBuffer();
-                        const audioBuffer = await this.audio.context.decodeAudioData(arrayBuffer);
-
-                        const assetObject = {
-                            id,
-                            asset: audioBuffer,
-                            config: {
-                                ...config,
-                                volume: config.volume || 1,
-                                loop: config.loop || false,
-                                autoplay: config.autoplay || false,
-                                muted: config.muted || false,
-                                category: config.category || 'master'
-                            },
-                            type
+                    if (this.config.worker) {
+                        this.audio.load(id, src, config);
+                        const wait_for_download = event => {
+                            if (event.data.type === 'pixalo_audio_loaded') {
+                                resolve();
+                                this.off('worker_msg', wait_for_download);
+                            }
                         };
-
-                        this.assets.set(id, assetObject);
-
-                        resolve({asset: audioBuffer, config: assetObject.config, type});
-                    } catch (e) {
-                        reject(new Error(`Failed to load audio: ${e.message}`));
+                        this.on('worker_msg', wait_for_download)
+                    } else {
+                        this.audio.load(id, src, config).then(resolve).catch(reject);
                     }
                     break;
                 default:
@@ -839,6 +1022,11 @@ class Pixalo extends Utils {
     find (entityId) {
         return this.entities.get(entityId);
     }
+    findByClass (className) {
+        return Array.from(this.entities).filter(
+            ([key, value]) => value.class.split(' ').includes(className)
+        ).map(([key, value]) => value);
+    }
     isEntity (target) {
         return target instanceof Entity;
     }
@@ -912,6 +1100,18 @@ class Pixalo extends Utils {
         if (quality < 0 || quality > 1)
             return this.error('Quality must be between 0 and 1');
 
+        if (this.config.worker) {
+            return new Promise(resolve => {
+                this.workerSend({
+                    action: 'take_screenshot',
+                    ...options
+                }, 'screenshot_taken', event => resolve({
+                    ...event.data.details,
+                    revoke: () => URL.revokeObjectURL(blobURL)
+                }));
+            });
+        }
+
         // Create a temporary canvas to handle the screenshot
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
@@ -934,7 +1134,7 @@ class Pixalo extends Utils {
         const dataURL = tempCanvas.toDataURL(mimeType, quality);
 
         // Convert to Blob
-        const blob = this.dataURLToBlob(dataURL);
+        const blob = Pixalo.dataURLToBlob(dataURL);
 
         // Create Blob URL
         const blobURL = URL.createObjectURL(blob);
@@ -946,6 +1146,9 @@ class Pixalo extends Utils {
             link.href = dataURL;
             link.click();
         }
+
+        // Cleanup
+        tempCanvas.remove();
 
         return {
             dataURL,
@@ -960,8 +1163,7 @@ class Pixalo extends Utils {
 
 }
 
-Pixalo.prototype.Bezier  = Bezier;
-Pixalo.prototype.Ease    = Ease;
-Pixalo.prototype.TileMap = TileMap;
+Pixalo.prototype.Bezier = Bezier;
+Pixalo.prototype.Ease   = Ease;
 
 export default Pixalo;

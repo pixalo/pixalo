@@ -21,8 +21,8 @@ class Collision {
         entities.forEach(entity => {
             const lastPos = this.lastPositions.get(entity.id);
             if (!lastPos ||
-                lastPos.x !== entity.absoluteX ||
-                lastPos.y !== entity.absoluteY ||
+                lastPos.x !== entity.absoluteX + entity.collision.x ||
+                lastPos.y !== entity.absoluteY + entity.collision.y ||
                 lastPos.rotation !== entity.styles.rotation ||
                 lastPos.scaleX !== entity.styles.scaleX ||
                 lastPos.scaleY !== entity.styles.scaleY ||
@@ -33,8 +33,8 @@ class Collision {
             }
 
             this.lastPositions.set(entity.id, {
-                x: entity.absoluteX,
-                y: entity.absoluteY,
+                x: entity.absoluteX + entity.collision.x,
+                y: entity.absoluteY + entity.collision.y,
                 rotation: entity.styles.rotation,
                 scaleX: entity.styles.scaleX,
                 scaleY: entity.styles.scaleY,
@@ -62,7 +62,7 @@ class Collision {
                         ...collisionInfo,
                         timestamp: Date.now()
                     });
-                    
+
                     // Emit collision events
                     entity1.trigger('collide', {
                         entity: entity2,
@@ -121,16 +121,16 @@ class Collision {
         return this.detectSATCollision(vertices1, vertices2, entity1, entity2, threshold);
     }
     detectCircleCollision (circle1, circle2) {
-        const radius1 = Math.min(circle1.width, circle1.height) / 2;
-        const radius2 = Math.min(circle2.width, circle2.height) / 2;
+        const radius1 = Math.min(circle1.collision.width, circle1.collision.height) / 2;
+        const radius2 = Math.min(circle2.collision.width, circle2.collision.height) / 2;
 
         const center1 = {
-            x: circle1.absoluteX + circle1.width / 2,
-            y: circle1.absoluteY + circle1.height / 2
+            x: circle1.absoluteX + circle1.collision.x + circle1.collision.width / 2,
+            y: circle1.absoluteY + circle1.collision.y + circle1.collision.height / 2
         };
         const center2 = {
-            x: circle2.absoluteX + circle2.width / 2,
-            y: circle2.absoluteY + circle2.height / 2
+            x: circle2.absoluteX + circle2.collision.x + circle2.collision.width / 2,
+            y: circle2.absoluteY + circle2.collision.y + circle2.collision.height / 2
         };
 
         const dx = center2.x - center1.x;
@@ -326,7 +326,7 @@ class Collision {
         return vertices;
     }
     getStarVertices (entity) {
-        const outerRadius = Math.min(entity.width, entity.height) / 2;
+        const outerRadius = Math.min(entity.collision.width, entity.collision.height) / 2;
         const innerRadius = outerRadius * 0.4;  // We reduce the ratio of the inner to outer radius.
         const spikes = entity.styles.spikes || 5;
         const vertices = [];
@@ -361,7 +361,7 @@ class Collision {
     }
     getCircleVertices (entity, segments = 16) {
         const vertices = [];
-        const radius = Math.min(entity.width, entity.height) / 2;
+        const radius = Math.min(entity.collision.width, entity.collision.height) / 2;
 
         for (let i = 0; i < segments; i++) {
             const angle = (i / segments) * Math.PI * 2;
@@ -374,8 +374,8 @@ class Collision {
         return vertices;
     }
     getTriangleVertices (entity) {
-        const w = entity.width / 2;
-        const h = entity.height / 2;
+        const w = entity.collision.width / 2;
+        const h = entity.collision.height / 2;
         return [
             {x: 0, y: -h},
             {x: w, y: h},
@@ -383,8 +383,8 @@ class Collision {
         ];
     }
     getRectangleVertices (entity, radius) {
-        const w = entity.width / 2;
-        const h = entity.height / 2;
+        const w = entity.collision.width / 2;
+        const h = entity.collision.height / 2;
 
         if (!radius) {
             return [
@@ -442,18 +442,18 @@ class Collision {
         // Create a temporary canvas to draw a path
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = entity.width;
-        tempCanvas.height = entity.height;
+        tempCanvas.width = entity.collision.width;
+        tempCanvas.height = entity.collision.height;
 
         // Draw a path
         tempCtx.save();
-        tempCtx.translate(entity.width / 2, entity.height / 2);
+        tempCtx.translate(entity.collision.width / 2, entity.collision.height / 2);
 
         // CustomPath implementation
         entity.styles.customPath(tempCtx);
 
         // Extracting points from a path using isPointInPath
-        const vertices = this.samplePathPoints(tempCtx, entity.width, entity.height);
+        const vertices = this.samplePathPoints(tempCtx, entity.collision.width, entity.collision.height);
 
         tempCtx.restore();
 
@@ -570,8 +570,8 @@ class Collision {
 
             // Apply position
             return {
-                x: rotatedX + entity.absoluteX + entity.width / 2,
-                y: rotatedY + entity.absoluteY + entity.height / 2
+                x: rotatedX + entity.absoluteX + entity.collision.x + entity.collision.width / 2,
+                y: rotatedY + entity.absoluteY + entity.collision.y + entity.collision.height / 2
             };
         });
     }
