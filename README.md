@@ -9,7 +9,7 @@ A powerful and flexible 2D game engine built with JavaScript, designed for creat
 - 📐 Grid system with customizable properties
 - 🔄 Sprite sheet and asset management
 - 💥 Collision detection system
-- 🎵 Audio management with categories and effects
+- 🎵 Audio management with spatial controls
 - 🗺️ Tile map system for level design
 - 🎆 Particle emitter system
 - 📸 Screenshot functionality

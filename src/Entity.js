@@ -112,8 +112,6 @@ class Entity {
 
         if (this.sprite && this.sprite.defaultAnimation)
             this.play(this.sprite.defaultAnimation);
-
-        this.moveAnimation = null;
     }
 
     /** ======== EVENTS ======== */
@@ -170,7 +168,7 @@ class Entity {
     trigger (eventName, ...args) {
         if (Array.isArray(eventName)) {
             eventName.forEach(event => {
-                this.trigger(event, data);
+                this.trigger(event, args);
             })
             return this;
         }
@@ -486,17 +484,27 @@ class Entity {
     style (property, value) {
         if (typeof property === 'object') {
             if ('x' in property || 'y' in property) {
-                Object.assign(this, property);
+                Object.assign(this, {x: property.x, y: property.y});
                 this.updatePosition();
             }
+
+            if ('fill' in property)
+                property.backgroundColor = property.backgroundColor || property.fill;
+
             Object.assign(this.styles, property);
         } else {
             if (property === 'x' || property === 'y') {
                 this[property] = value;
                 this.updatePosition();
-            } else {
-                this.styles[property] = value;
+                return this;
             }
+
+            if (property === 'fill') {
+                this.styles['backgroundColor'] = value;
+                this.styles['fill'] = value;
+            }
+
+            this.styles[property] = value;
         }
         return this;
     }
@@ -523,22 +531,28 @@ class Entity {
     move (options, y = 0, duration = 0) {
         this.halt();
 
-        if (typeof options === 'number') {
-            options = {
-                x: options,
-                y: y,
-                duration: duration || 0
-            };
-        }
+        if (typeof options === 'number')
+            options = { x: options, y: y, duration: duration || 0 };
 
         const config = {
             x: this.x,
             y: this.y,
-            duration: 0,
             easing: 'linear',
+            duration: 0,
             relative: true,
             ...options
         };
+
+        if (this.engine.physicsEnabled) {
+            const position = {
+                x: config.relative ? options.x || 0 : config.x,
+                y: config.relative ? options.y || 0 : config.y
+            };
+            const moveEntity = this.engine.physics.moveEntity(this, position, config.relative, config.duration, config.relative);
+
+            if (moveEntity)
+                return this;
+        }
 
         if (config.relative) {
             if ('x' in options) config.x = this.x + (options.x || 0);
@@ -549,10 +563,12 @@ class Entity {
         const deltaY = config.y - this.y;
 
         if (!config.duration) {
-            this.style({
+            const position = {
                 x: config.x,
                 y: config.y
-            });
+            };
+
+            this.style(position);
 
             if (config.onComplete) {
                 config.onComplete.call(this);
@@ -580,16 +596,18 @@ class Entity {
             let elapsed = currentTime - startTime;
 
             if (elapsed >= config.duration) {
-                this.style({
+                const position = {
                     x: config.x,
                     y: config.y
-                });
+                };
+
+                this.style(position);
 
                 if (config.onComplete) {
                     config.onComplete.call(this);
                 }
 
-                this.moveAnimation = null;
+                this.unset('moveAnimation');
                 return;
             }
 
@@ -620,10 +638,12 @@ class Entity {
             if (config.onUpdate)
                 config.onUpdate.call(this, eased);
 
-            this.moveAnimation = requestAnimationFrame(animate);
+            const animationId = requestAnimationFrame(animate);
+            this.data('moveAnimation', animationId);
         };
 
-        this.moveAnimation = requestAnimationFrame(animate);
+        const animationId = requestAnimationFrame(animate);
+        this.data('moveAnimation', animationId);
 
         return this;
     }
@@ -639,11 +659,22 @@ class Entity {
         this._data[key] = value;
         return this;
     }
+    unset (key) {
+        if (typeof this._data[key] !== 'undefined')
+            delete this._data[key];
+        return this;
+    }
     halt () {
-        if (this.moveAnimation) {
-            cancelAnimationFrame(this.moveAnimation);
-            this.moveAnimation = null;
-            this.trigger('moveStop', {x: this.x, y: this.y});
+        const moveAnimation = this.data('moveAnimation');
+
+        if (moveAnimation) {
+            cancelAnimationFrame(moveAnimation);
+            this.unset('moveAnimation');
+
+            // Wait for real situations
+            this.engine.timeout(() => {
+                this.trigger('moveStop', {x: this.x, y: this.y});
+            }, 5);
         }
         return this;
     }

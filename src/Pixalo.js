@@ -376,20 +376,19 @@ class Pixalo extends Utils {
         this.on(eventName, onceWrapper);
         return this;
     }
-    trigger (eventName, data) {
+    trigger (eventName, ...args) {
         if (Array.isArray(eventName)) {
             eventName.forEach(event => {
-                this.trigger(event, data);
+                this.trigger(event, args);
             })
             return this;
         }
 
-        if (!this.eventListeners.has(eventName))
-            return this;
+        if (!this.eventListeners.has(eventName)) return this;
 
         const listeners = this.eventListeners.get(eventName);
         for (const callback of listeners)
-            callback.call(this, data);
+            callback.apply(this, args);
 
         return this;
     }
@@ -421,7 +420,7 @@ class Pixalo extends Utils {
         return timerId;
     }
     timeout (callback, delay) {
-        this.timer(callback, delay, false);
+        return this.timer(callback, delay, false);
     }
     clearTimer (timerId) {
         return this.timers.delete(timerId);
@@ -684,17 +683,92 @@ class Pixalo extends Utils {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
     reset () {
+        this.trigger('reset');
+
+        // Stop the engine first
+        this.stop();
+
+        // Clear runtime data
         this.pressedKeys.clear();
         this.entities.clear();
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.eventListeners.clear();
         this.timers.clear();
+        this.assets.clear();
+
+        // Reset subsystems
         this.collision.reset();
         this.audio.cleanup();
+        this.camera.reset();
+        this.background.clear();
+        this.emitters.clear();
+        this.physics.reset();
+
+        // Reset state variables
         this.draggedEntity = null;
+        this.draggedEntities.clear();
         this.hoveredEntity = null;
-        this.touchIdentifier = null;
         this.activeTileMap = null;
+        this.animations = {};
+        this.lastTime = 0;
+
+        // Reset debugger
+        this.debugger = {
+            active: false,
+            level: 'advanced',
+            fps: {
+                target: this.config.fps,
+                actual: this.config.fps,
+                ratio: 100
+            },
+            lastFpsUpdate: performance.now(),
+            frameCount: 0,
+            targetFrameCount: 0
+        };
+
+        // Reset canvas and context
+        this.clear();
+        this._applyQuality(this.config.quality);
+
+        // Reset canvas style to original config
+        const canvasConfig = {
+            attributes: {
+                tabIndex: 0,
+                width: this.config.width * this.config.quality,
+                height: this.config.height * this.config.quality
+            },
+            style: {
+                width: this.config.width + 'px',
+                height: this.config.height + 'px',
+                outline: 'none',
+                backgroundColor: this.config.background,
+                imageRendering: this.config.imageRendering || this.canvas?.style?.imageRendering
+            }
+        };
+
+        Object.assign(this.canvas, canvasConfig.attributes);
+        Object.assign(this.canvas.style, canvasConfig.style);
+
+        // Reset subsystem configurations to original config
+        this.gridEnabled = Boolean(this.config.grid);
+        this.physicsEnabled = Boolean(this.config.physics);
+        this.collisionEnabled = Boolean(this.config.collision);
+
+        // Reinitialize subsystems with original config
+        this.background = new Background(this);
+        this.camera = new Camera(this, this.config.camera);
+        this.grid = new Grid(this, this.config.grid || {});
+        this.physics = new Physics(this, this.config.physics);
+        this.collision = new Collision();
+        this.tileMap = new TileMap(this);
+        this.emitters = new Emitters(this);
+
+        // Send worker update if in worker mode
+        this.workerSend({
+            action: 'update_canvas',
+            props: canvasConfig
+        });
+
+        return this;
     }
     /** ======== END ======== */
 

@@ -9,18 +9,31 @@ class Camera {
     constructor (engine, config = {}) {
         this.engine = engine;
 
-        this.x = config.x || 0;
-        this.y = config.y || 0;
-        this.zoom = config.zoom || 1;
+        // Store original config for reset functionality
+        this._originalConfig = {
+            x: config.x || 0,
+            y: config.y || 0,
+            zoom: config.zoom || 1,
+            bounds: config.bounds || null,
+            minZoom: config.minZoom || 0.1,
+            maxZoom: config.maxZoom || 5,
+            smoothing: config.smoothing ?? true,
+            smoothSpeed: config.smoothSpeed || 0.1,
+            rotation: config.rotation || 0
+        };
+
+        this.x = this._originalConfig.x;
+        this.y = this._originalConfig.y;
+        this.zoom = this._originalConfig.zoom;
 
         // Camera limitations
-        this.bounds = config.bounds || null;
-        this.minZoom = config.minZoom || 0.1;
-        this.maxZoom = config.maxZoom || 5;
+        this.bounds = this._originalConfig.bounds;
+        this.minZoom = this._originalConfig.minZoom;
+        this.maxZoom = this._originalConfig.maxZoom;
 
         // Smooth motion settings
-        this.smoothing = config.smoothing ?? true;
-        this.smoothSpeed = config.smoothSpeed || 0.1;
+        this.smoothing = this._originalConfig.smoothing;
+        this.smoothSpeed = this._originalConfig.smoothSpeed;
 
         this._targetX = this.x;
         this._targetY = this.y;
@@ -47,7 +60,7 @@ class Camera {
             cinematic: null
         };
 
-        this.rotation = config.rotation || 0; // Current rotation angle
+        this.rotation = this._originalConfig.rotation; // Current rotation angle
         this._targetRotation = this.rotation; // Target angle for rotation
         this._lastRotation = this.rotation;   // Previous angle to calculate changes
         this.deltaRotation = 0;               // The amount of change in rotation
@@ -881,6 +894,59 @@ class Camera {
                 this._effects[name] = null;
             }
         }
+    }
+    /** ======== END ======== */
+
+    /** ======== RESET ======== */
+    reset () {
+        // Reset position and zoom
+        this.x = this._originalConfig.x;
+        this.y = this._originalConfig.y;
+        this.zoom = this._originalConfig.zoom;
+        this.rotation = this._originalConfig.rotation;
+
+        // Reset target values
+        this._targetX = this.x;
+        this._targetY = this.y;
+        this._targetZoom = this.zoom;
+        this._targetRotation = this.rotation;
+
+        // Reset last values
+        this._lastX = this.x;
+        this._lastY = this.y;
+        this._lastZoom = this.zoom;
+        this._lastRotation = this.rotation;
+
+        // Reset deltas
+        this.deltaX = 0;
+        this.deltaY = 0;
+        this.deltaZoom = 0;
+        this.deltaRotation = 0;
+
+        // Reset camera limitations
+        this.bounds = this._originalConfig.bounds;
+        this.minZoom = this._originalConfig.minZoom;
+        this.maxZoom = this._originalConfig.maxZoom;
+
+        // Reset smooth motion settings
+        this.smoothing = this._originalConfig.smoothing;
+        this.smoothSpeed = this._originalConfig.smoothSpeed;
+
+        // Cancel follow
+        this.cancelFollow();
+
+        // Clear all states
+        this._states.clear();
+
+        // Clear all effects
+        this._effects = {
+            shake: null,
+            flash: null,
+            fade: null,
+            cinematic: null
+        };
+
+        return this;
     }
     /** ======== END ======== */
 
