@@ -8,13 +8,16 @@ class Entity {
 
     constructor (id, config = {}) {
         this.engine = config.engine;
+
         this.id = id;
+
+        const classNames = config.class || '';
+        this.class = new Set(classNames.split(/\s+/).filter(Boolean));
+
         this.x  = config.x || 0;
         this.y  = config.y || 0;
         this.width = config.width || 32;
         this.height = config.height || 32;
-
-        this.class = config.class || '';
 
         this._data = {};
         this.parent = null;
@@ -26,10 +29,11 @@ class Entity {
         this.styles = {
             ...this.#normalizeBackground(config),
 
-            color: config.color || '#000000',
-            opacity: config.opacity || 1,
-
             shape: config.shape || 'rectangle',
+
+            blur: config.blur || 0,
+            opacity: config.opacity ?? 1,
+
             borderColor: config.borderColor,
             borderWidth: config.borderWidth || 0,
             borderStyle: config.borderStyle || 'solid',
@@ -39,9 +43,9 @@ class Entity {
             shadowBlur: config.shadowBlur || 0,
             shadowOffsetX: config.shadowOffsetX || 0,
             shadowOffsetY: config.shadowOffsetY || 0,
-            blur: config.blur || 0,
 
             rotation: config.rotation || 0,
+
             scale: config.scale || 1,
             scaleX: config.scaleX || 1,
             scaleY: config.scaleY || 1,
@@ -54,14 +58,14 @@ class Entity {
 
             text: config.text,
             font: config.font || '16px Arial',
+            color: config.color || '#000000',
             textAlign: config.textAlign || 'center',
-            textBaseline: config.textBaseline || 'middle',
             lineHeight: config.lineHeight || 1.2,
+            textBaseline: config.textBaseline || 'middle',
 
             transition: config.transition || {},
-            animation: config.animation || {},
 
-            visible: config.visible ?? true,
+            visible: config.visible || true,
             blendMode: config.blendMode || 'source-over',
 
             clip: config.clip,
@@ -69,8 +73,9 @@ class Entity {
             filter: config.filter,
 
             points: config.points || [],
-            roundness: config.roundness || 0,
-            customPath: config.customPath ? config.customPath.bind(this) : null
+            customPath: config.customPath ? config.customPath.bind(this) : null,
+
+            spikes: config.spikes || 5
         };
 
         this.collision = {
@@ -92,7 +97,8 @@ class Entity {
 
         this.eventListeners  = new Map();
         this.animationStates = new Map();
-        this.zIndex = config.zIndex || 0;
+
+        this.layer(config.layer || 0);
         this.defaultZIndex = this.zIndex;
 
         this.sprite = config.sprite ? {
@@ -112,8 +118,6 @@ class Entity {
 
         if (this.sprite && this.sprite.defaultAnimation)
             this.play(this.sprite.defaultAnimation);
-
-        this.moveAnimation = null;
     }
 
     /** ======== EVENTS ======== */
@@ -170,7 +174,7 @@ class Entity {
     trigger (eventName, ...args) {
         if (Array.isArray(eventName)) {
             eventName.forEach(event => {
-                this.trigger(event, data);
+                this.trigger(event, args);
             })
             return this;
         }
@@ -248,9 +252,15 @@ class Entity {
         return this.children.get(childId);
     }
     findByClass (className) {
-        return Array.from(this.children).filter(
-            ([key, value]) => value.class.split(' ').includes(className)
-        ).map(([key, value]) => value);
+        className = className.trim();
+        if (!className) {
+            this.engine.warn('ClassName is required');
+            return [];
+        }
+
+        return Array.from(this.children)
+            .filter(([, ent]) => ent.class.has(className))
+            .map(([, ent]) => ent);
     }
     getEntities () {
         const entities = [this];
@@ -366,9 +376,10 @@ class Entity {
 
     /** ======== ANIMATIONS ======== */
     transition (properties, options = {}) {
+        /* ---------- normalize arguments ---------- */
         if (typeof properties === 'string') {
-            const property = properties;
-            const value = arguments[1];
+            const property = properties,
+                value = arguments[1];
             options = arguments[2] || {};
             properties = {[property]: value};
         }
@@ -380,45 +391,63 @@ class Entity {
             ...options
         };
 
+        /* ---------- capture starting values ---------- */
         const startValues = {};
-        Object.keys(properties).forEach(prop => {
-            startValues[prop] = this.styles[prop];
-        });
+        Object.keys(properties).forEach(p => startValues[p] = this.styles[p]);
 
-        const startTime = performance.now() + options.delay;
+        /* ---------- time-handling variables ---------- */
+        let startTime = performance.now() + options.delay; // real-world start moment
+        let pausedAt = 0;   // when we entered pause
+        let totalPause = 0; // accumulated pause time
 
-        let ease = typeof options.easing === 'function' ? options.easing : (this.engine.Ease[options.easing] ?? this.engine.Ease['linear']);
+        const ease = (typeof options.easing === 'function')
+            ? options.easing
+            : (this.engine.Ease[options.easing] ?? this.engine.Ease.linear);
 
-        const animate = (currentTime) => {
-            if (currentTime < startTime) {
+        /* ---------- animation loop ---------- */
+        const animate = (now) => {
+            /* engine paused -> record pause start and wait */
+            if (!this.engine?.running) {
+                if (pausedAt === 0) pausedAt = now;
                 requestAnimationFrame(animate);
                 return;
             }
 
-            const elapsed = currentTime - startTime;
-            if (elapsed >= options.duration) {
-                this.style(properties);
-                if (typeof options.onComplete === 'function') {
-                    options.onComplete.call(this);
-                }
+            /* just resumed -> add the last pause duration to totalPause */
+            if (pausedAt !== 0) {
+                totalPause += now - pausedAt;
+                pausedAt = 0;
+            }
+
+            const adjustedNow = now - totalPause; // virtual time without pauses
+
+            /* delay not finished yet */
+            if (adjustedNow < startTime) {
+                requestAnimationFrame(animate);
                 return;
             }
 
+            const elapsed = adjustedNow - startTime;
+            if (elapsed >= options.duration) {               /* animation finished */
+                this.style(properties);
+                options.onComplete?.call(this);
+                return;
+            }
+
+            /* interpolate and apply current frame */
             const progress = elapsed / options.duration;
             const eased = ease(progress);
 
             const currentValues = {};
             Object.keys(properties).forEach(prop => {
-                const startValue = startValues[prop];
-                const targetValue = properties[prop];
-
-                if (typeof startValue === 'number') {
-                    currentValues[prop] = startValue + (targetValue - startValue) * eased;
-                } else if (typeof startValue === 'string' && startValue.startsWith('#')) {
-                    currentValues[prop] = this._interpolateColor(startValue, targetValue, eased);
+                const startV = startValues[prop],
+                    endV = properties[prop];
+                if (typeof startV === 'number') {
+                    currentValues[prop] = startV + (endV - startV) * eased;
+                } else if (typeof startV === 'string' && startV.startsWith('#')) {
+                    currentValues[prop] = this._interpolateColor(startV, endV, eased);
                 }
             });
-
             this.style(currentValues);
             requestAnimationFrame(animate);
         };
@@ -442,22 +471,26 @@ class Entity {
         const animate = () => {
             if (!state.isRunning) return;
 
-            const keyframe = animation.keyframes[state.currentFrame];
-            this.style(keyframe);
+            if (this.engine?.running) {
+                const keyframe = animation.keyframes[state.currentFrame];
+                this.style(keyframe);
 
-            state.currentFrame++;
-            if (state.currentFrame >= animation.keyframes.length) {
-                if (state.repeat === 'infinite' || state.repeat > 0) {
-                    state.currentFrame = 0;
-                    if (typeof state.repeat === 'number') state.repeat--;
-                } else {
-                    state.isRunning = false;
-                    return;
+                state.currentFrame++;
+                if (state.currentFrame >= animation.keyframes.length) {
+                    if (state.repeat === 'infinite' || state.repeat > 0) {
+                        state.currentFrame = 0;
+                        if (typeof state.repeat === 'number') state.repeat--;
+                    } else {
+                        state.isRunning = false;
+                        return;
+                    }
                 }
             }
 
-            setTimeout(() => requestAnimationFrame(animate),
-                animation.options.duration / animation.keyframes.length);
+            this.engine.timeout(
+                () => requestAnimationFrame(animate),
+                animation.options.duration / animation.keyframes.length
+            );
         };
 
         requestAnimationFrame(animate);
@@ -486,17 +519,31 @@ class Entity {
     style (property, value) {
         if (typeof property === 'object') {
             if ('x' in property || 'y' in property) {
-                Object.assign(this, property);
+                Object.assign(this, {
+                    x: property.x || this.x,
+                    y: property.y || this.y
+                });
                 this.updatePosition();
             }
+
+            if ('fill' in property) {
+                property.backgroundColor = property.fill;
+            }
+
             Object.assign(this.styles, property);
         } else {
             if (property === 'x' || property === 'y') {
                 this[property] = value;
                 this.updatePosition();
-            } else {
-                this.styles[property] = value;
+                return this;
             }
+
+            if (property === 'fill') {
+                this.styles['backgroundColor'] = value;
+                this.styles['fill'] = value;
+            }
+
+            this.styles[property] = value;
         }
         return this;
     }
@@ -521,25 +568,38 @@ class Entity {
         });
     }
     move (options, y = 0, duration = 0) {
-        this.halt();
+        this.halt(); // cancel any previous move-animation
 
-        if (typeof options === 'number') {
-            options = {
-                x: options,
-                y: y,
-                duration: duration || 0
-            };
-        }
+        /* ---------- argument overloading ---------- */
+        if (typeof options === 'number')
+            options = {x: options, y, duration: duration || 0};
 
         const config = {
             x: this.x,
             y: this.y,
-            duration: 0,
             easing: 'linear',
+            duration: 0,
             relative: true,
             ...options
         };
 
+        /* ---------- physics branch ---------- */
+        if (this.engine.physicsEnabled) {
+            const moveOpts = {
+                entity  : this,
+                x       : config.relative ? (options.x || 0) : config.x,
+                y       : config.relative ? (options.y || 0) : config.y,
+                duration: config.duration,
+                easing  : config.easing,
+                relative: config.relative,
+                onUpdate: config.onUpdate,
+                onComplete: config.onComplete
+            };
+
+            const ok = this.engine.physics.moveEntity(moveOpts);
+            if (ok) return this;
+        }
+        /* ---------- convert relative to absolute ---------- */
         if (config.relative) {
             if ('x' in options) config.x = this.x + (options.x || 0);
             if ('y' in options) config.y = this.y + (options.y || 0);
@@ -548,83 +608,81 @@ class Entity {
         const deltaX = config.x - this.x;
         const deltaY = config.y - this.y;
 
+        /* ---------- zero-duration jump ---------- */
         if (!config.duration) {
-            this.style({
-                x: config.x,
-                y: config.y
-            });
-
-            if (config.onComplete) {
-                config.onComplete.call(this);
-            }
-
+            this.style({x: config.x, y: config.y});
+            config.onComplete?.call(this);
             return this;
         }
 
+        /* ---------- capture initial states ---------- */
         const entities = this.getEntities();
         const initialPositions = new Map();
+        entities.forEach(e =>
+            initialPositions.set(e, {x: e.x, y: e.y, absoluteX: e.absoluteX, absoluteY: e.absoluteY})
+        );
 
-        entities.forEach(entity => {
-            initialPositions.set(entity, {
-                x: entity.x,
-                y: entity.y,
-                absoluteX: entity.absoluteX,
-                absoluteY: entity.absoluteY
-            });
-        });
+        /* ---------- time-keeping for pause/resume ---------- */
+        let startTime = performance.now();
+        let pausedAt = 0;   // when we entered pause
+        let totalPause = 0;  // accumulated paused time
 
-        const startTime = performance.now();
-        const easingFunction = typeof config.easing === 'function' ? config.easing : this.engine.Ease[config.easing] || this.engine.Ease['linear'];
+        const easingFunction =
+            typeof config.easing === 'function'
+                ? config.easing
+                : this.engine.Ease[config.easing] || this.engine.Ease.linear;
 
-        const animate = (currentTime) => {
-            let elapsed = currentTime - startTime;
-
-            if (elapsed >= config.duration) {
-                this.style({
-                    x: config.x,
-                    y: config.y
-                });
-
-                if (config.onComplete) {
-                    config.onComplete.call(this);
-                }
-
-                this.moveAnimation = null;
+        /* ---------- animation loop ---------- */
+        const animate = (now) => {
+            /* ---- engine paused -> record pause start ---- */
+            if (!this.engine?.running) {
+                if (pausedAt === 0) pausedAt = now;
+                requestAnimationFrame(animate);
                 return;
             }
 
+            /* ---- just resumed -> update total paused time ---- */
+            if (pausedAt !== 0) {
+                totalPause += now - pausedAt;
+                pausedAt = 0;
+            }
+
+            const adjustedNow = now - totalPause;
+            let elapsed = adjustedNow - startTime;
+
+            /* ---- animation finished ---- */
+            if (elapsed >= config.duration) {
+                this.style({x: config.x, y: config.y});
+                config.onComplete?.call(this);
+                this.unset('moveAnimation');
+                return;
+            }
+
+            /* ---- interpolate and apply ---- */
             const progress = elapsed / config.duration;
             const eased = easingFunction(progress);
 
-            // Update entities position
             entities.forEach(entity => {
-                const initial = initialPositions.get(entity);
-
-                if (entity === this) { // this entity
+                const init = initialPositions.get(entity);
+                if (entity === this) {
                     entity.style({
-                        x: initial.x + deltaX * eased,
-                        y: initial.y + deltaY * eased
+                        x: init.x + deltaX * eased,
+                        y: init.y + deltaY * eased
                     });
-                } else { // children
-                    const relativeToParent = {
-                        x: initial.x,
-                        y: initial.y
-                    };
-                    entity.style({
-                        x: relativeToParent.x,
-                        y: relativeToParent.y
-                    });
+                } else {
+                    /* children keep their relative position */
+                    entity.style({x: init.x, y: init.y});
                 }
             });
 
-            if (config.onUpdate)
-                config.onUpdate.call(this, eased);
+            config.onUpdate?.call(this, eased);
 
-            this.moveAnimation = requestAnimationFrame(animate);
+            const animationId = requestAnimationFrame(animate);
+            this.data('moveAnimation', animationId);
         };
 
-        this.moveAnimation = requestAnimationFrame(animate);
-
+        const animationId = requestAnimationFrame(animate);
+        this.data('moveAnimation', animationId);
         return this;
     }
     hide () {
@@ -639,16 +697,38 @@ class Entity {
         this._data[key] = value;
         return this;
     }
+    unset (key) {
+        if (typeof this._data[key] !== 'undefined')
+            delete this._data[key];
+        return this;
+    }
     halt () {
-        if (this.moveAnimation) {
-            cancelAnimationFrame(this.moveAnimation);
-            this.moveAnimation = null;
-            this.trigger('moveStop', {x: this.x, y: this.y});
+        const moveAnimation = this.data('moveAnimation');
+        if (moveAnimation) {
+            cancelAnimationFrame(moveAnimation);
+            this.unset('moveAnimation');
+
+            // Wait for real situations
+            this.engine.timeout(() => {
+                this.trigger('moveStop', {x: this.x, y: this.y});
+            }, 5);
         }
         return this;
     }
-    addClass (className) {
-        this.class += ` ${className}`
+    addClass (...names) {
+        names.forEach(n => this.class.add(n));
+        return this;
+    }
+    removeClass (...names) {
+        names.forEach(n => this.class.delete(n));
+        return this;
+    }
+    toggleClass (name) {
+        this.class.delete(name) || this.class.add(name);
+        return this;
+    }
+    hasClass (name) {
+        return this.class.has(name);
     }
 
     /** ======== SpriteSheet ======== */
@@ -1177,6 +1257,7 @@ class Entity {
         if (!this.styles.clip) return;
 
         if (typeof this.styles.clip === 'function') {
+            ctx.beginPath();
             // Custom clip with function
             this.styles.clip.call(this, ctx);
             ctx.clip();
@@ -1417,7 +1498,6 @@ class Entity {
 
         return this;
     }
-
     getBounds () {
         const bounds = {
             x: this.absoluteX + this.collision.x,
@@ -1631,6 +1711,7 @@ class Entity {
 
         background.backgroundColor = config.fill ?? config.backgroundColor;
         background.backgroundGradient = config.gradient ?? config.backgroundGradient;
+        background.fill = background.backgroundColor;
 
         let imageConfig = config.image ?? config.backgroundImage;
 

@@ -3,18 +3,18 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-import Utils from "./Utils.js";
-import Bezier from "./Bezier.js";
-import Ease from "./Ease.js";
-import Camera from "./Camera.js";
+import Utils from './Utils.js';
+import Bezier from './Bezier.js';
+import Ease from './Ease.js';
+import Camera from './Camera.js';
 import Background from './Background.js';
-import Grid from "./Grid.js";
-import Entity from "./Entity.js";
-import Collision from "./Collision.js";
-import Physics from "./Physics.js";
-import TileMap from "./TileMap.js";
-import Emitters from "./Emitters.js";
-import AudioManager from "./AudioManager.js";
+import Grid from './Grid.js';
+import Entity from './Entity.js';
+import Collision from './Collision.js';
+import Physics from './Physics.js';
+import TileMap from './TileMap.js';
+import Emitters from './Emitters.js';
+import AudioManager from './AudioManager.js';
 
 class Pixalo extends Utils {
 
@@ -67,7 +67,7 @@ class Pixalo extends Utils {
         this.baseWidth = this.config.width;
         this.baseHeight = this.config.height;
         this.debugger = {
-            active: false,
+            active: config.debugger || false,
             level: 'advanced',
             fps: {
                 target: this.config.fps,
@@ -376,20 +376,19 @@ class Pixalo extends Utils {
         this.on(eventName, onceWrapper);
         return this;
     }
-    trigger (eventName, data) {
+    trigger (eventName, ...args) {
         if (Array.isArray(eventName)) {
             eventName.forEach(event => {
-                this.trigger(event, data);
+                this.trigger(event, args);
             })
             return this;
         }
 
-        if (!this.eventListeners.has(eventName))
-            return this;
+        if (!this.eventListeners.has(eventName)) return this;
 
         const listeners = this.eventListeners.get(eventName);
         for (const callback of listeners)
-            callback.call(this, data);
+            callback.apply(this, args);
 
         return this;
     }
@@ -421,7 +420,7 @@ class Pixalo extends Utils {
         return timerId;
     }
     timeout (callback, delay) {
-        this.timer(callback, delay, false);
+        return this.timer(callback, delay, false);
     }
     clearTimer (timerId) {
         return this.timers.delete(timerId);
@@ -613,7 +612,7 @@ class Pixalo extends Utils {
         this.clear();
         this.ctx.save();
         this.ctx.scale(this.config.quality, this.config.quality);
-        this.camera.apply(this.ctx);
+        this.camera.apply();
 
         this.trigger('beforerender', this.ctx);
 
@@ -684,26 +683,98 @@ class Pixalo extends Utils {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
     reset () {
+        this.trigger('reset');
+
+        // Stop the engine first
+        this.stop();
+
+        // Clear runtime data
         this.pressedKeys.clear();
         this.entities.clear();
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.eventListeners.clear();
         this.timers.clear();
+        this.assets.clear();
+
+        // Reset subsystems
         this.collision.reset();
         this.audio.cleanup();
+        this.camera.reset();
+        this.background.clear();
+        this.emitters.clear();
+        this.physics.reset();
+
+        // Reset state variables
         this.draggedEntity = null;
+        this.draggedEntities.clear();
         this.hoveredEntity = null;
-        this.touchIdentifier = null;
         this.activeTileMap = null;
+        this.animations = {};
+        this.lastTime = 0;
+
+        // Reset debugger
+        this.debugger = {
+            active: false,
+            level: 'advanced',
+            fps: {
+                target: this.config.fps,
+                actual: this.config.fps,
+                ratio: 100
+            },
+            lastFpsUpdate: performance.now(),
+            frameCount: 0,
+            targetFrameCount: 0
+        };
+
+        // Reset canvas and context
+        this.clear();
+        this._applyQuality(this.config.quality);
+
+        // Reset canvas style to original config
+        const canvasConfig = {
+            attributes: {
+                tabIndex: 0,
+                width: this.config.width * this.config.quality,
+                height: this.config.height * this.config.quality
+            },
+            style: {
+                width: this.config.width + 'px',
+                height: this.config.height + 'px',
+                outline: 'none',
+                backgroundColor: this.config.background,
+                imageRendering: this.config.imageRendering || this.canvas?.style?.imageRendering
+            }
+        };
+
+        Object.assign(this.canvas, canvasConfig.attributes);
+        Object.assign(this.canvas.style, canvasConfig.style);
+
+        // Reset subsystem configurations to original config
+        this.gridEnabled = Boolean(this.config.grid);
+        this.physicsEnabled = Boolean(this.config.physics);
+        this.collisionEnabled = Boolean(this.config.collision);
+
+        // Reinitialize subsystems with original config
+        this.background = new Background(this);
+        this.camera = new Camera(this, this.config.camera);
+        this.grid = new Grid(this, this.config.grid || {});
+        this.physics = new Physics(this, this.config.physics);
+        this.collision = new Collision();
+        this.tileMap = new TileMap(this);
+        this.emitters = new Emitters(this);
+
+        // Send worker update if in worker mode
+        this.workerSend({
+            action: 'update_canvas',
+            props: canvasConfig
+        });
+
+        return this;
     }
     /** ======== END ======== */
 
     /** ======== DEBUGGER ======== */
     enableDebugger () {
         this.debugger.active = true;
-        this.entities.forEach(entity => {
-            this.enableEntityDebug(entity);
-        });
         return this;
     }
     disableDebugger () {
@@ -712,18 +783,6 @@ class Pixalo extends Utils {
             this.disableEntityDebug(entity);
         });
         return this;
-    }
-    enableEntityDebug (entity) {
-        entity.style({debugCollision: true});
-        entity.children.forEach(child => {
-            this.enableEntityDebug(child);
-        });
-    }
-    disableEntityDebug (entity) {
-        entity.style({debugCollision: false});
-        entity.children.forEach(child => {
-            this.disableEntityDebug(child);
-        });
     }
     renderDebugInfo () {
         if (!this.debugger.active) return;
@@ -775,6 +834,7 @@ class Pixalo extends Utils {
             if (entity.collision?.enabled) activeCollisions++;
         });
         ctx.fillText(`Physics: ${this.physicsEnabled ? 'Enabled' : 'Disabled'}`, padding + 5, y += lineHeight);
+        ctx.fillText(`Collision: ${this.collisionEnabled ? 'Enabled' : 'Disabled'}`, padding + 5, y += lineHeight);
         ctx.fillText(`Collision Objects: ${activeCollisions}`, padding + 5, y += lineHeight);
 
         ctx.fillStyle = '#00ff00';
@@ -797,7 +857,7 @@ class Pixalo extends Utils {
     }
     info (...args) {
         if (this.debugger && this.debugger.active)
-            console.info('%c[Pixalo INFO]', 'color: #4caf50;', ...args);
+            console.info('%c[Pixalo INFO]', 'color: #4491F8;', ...args);
         return this;
     }
     warn (...args) {
@@ -1006,11 +1066,6 @@ class Pixalo extends Utils {
             this.physics.addEntity(entity, entity.physics || config.physics);
         }
     
-        // Enable debug if active
-        if (this.debugger.active) {
-            this.enableEntityDebug(entity);
-        }
-    
         return entity;
     }
     getAllEntities () {
@@ -1023,9 +1078,15 @@ class Pixalo extends Utils {
         return this.entities.get(entityId);
     }
     findByClass (className) {
-        return Array.from(this.entities).filter(
-            ([key, value]) => value.class.split(' ').includes(className)
-        ).map(([key, value]) => value);
+        className = className.trim();
+        if (!className) {
+            this.warn('ClassName is required');
+            return [];
+        }
+
+        return Array.from(this.entities)
+            .filter(([, ent]) => ent.class.has(className))
+            .map(([, ent]) => ent);
     }
     isEntity (target) {
         return target instanceof Entity;

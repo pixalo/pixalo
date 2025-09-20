@@ -3,7 +3,7 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-import Particle from "./Particle.js";
+import Particle from './Particle.js';
 
 class Emitters {
 

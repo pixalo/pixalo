@@ -3,14 +3,14 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-import Pixalo from "./Pixalo.js";
-import AudioManager from "./AudioManager.js";
+import Pixalo from './Pixalo.js';
+import AudioManager from './AudioManager.js';
 
 class Workers {
 
     static workers = new Map();
 
-    static register (selector, scriptURL, options = {}) {
+    static register (selector, script, options = {}) {
         let canvas;
 
         if (typeof selector === 'string') {
@@ -27,7 +27,9 @@ class Workers {
         const wid = `worker_${Math.floor(Math.random() * 99999)}`;
         const offscreen = canvas.transferControlToOffscreen();
 
-        const worker = new Worker(scriptURL, {type: options.type || 'module'});
+        script = Pixalo.scriptToUrl(script);
+
+        const worker = new Worker(script, {type: options.type || 'module'});
         worker.postMessage({
             wid: wid, canvas: offscreen,
             window: {

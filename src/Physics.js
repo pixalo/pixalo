@@ -17,15 +17,17 @@ class Physics {
         this.quality = config.quality || 1;
         this.SCALE = this.BASE_SCALE * this.quality;
 
-        this.world = new Box2D.Dynamics.b2World(
-            new Box2D.Common.Math.b2Vec2(
-                config.gravity?.x / this.SCALE || 0,
-                config.gravity?.y / this.SCALE || 9.8
-            ),
-            config.sleep || true // allow sleep
-        );
+        const gravity = config.gravity === false || config.gravity === undefined ? {x: 0, y: 0} : {
+            x: config.gravity.x ?? 0,
+            y: config.gravity.y ?? 9.8 * this.SCALE
+        };
 
-        this.config = {
+        // Store original config for reset functionality
+        this.originalConfig = {
+            scale: this.BASE_SCALE,
+            quality: this.quality,
+            gravity,
+            sleep: config.sleep !== undefined ? config.sleep : true,
             friction: config.friction || 0.2,
             restitution: config.bounce || 0.2,
             density: config.density || 1,
@@ -34,6 +36,12 @@ class Physics {
             positionIterations: config.positionIterations || 3,
             ...config
         };
+        this.config = {...this.originalConfig};
+
+        this.world = new Box2D.Dynamics.b2World(
+            new Box2D.Common.Math.b2Vec2(gravity.x / this.SCALE, gravity.y / this.SCALE),
+            this.originalConfig.sleep
+        );
 
         this.bodies = new Map();
         this.velocities = new Map();
@@ -254,55 +262,136 @@ class Physics {
         }
         return this;
     }
-    moveEntity (entity, position, relative = false) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
-        const body = this.bodies.get(entity);
+    moveEntity (options, y = 0, duration = 0, easing = 'linear') {
+        /* ---------- argument overloading ---------- */
+        if (typeof options === 'number')
+            options = {x: options, y, duration: duration || 0, easing};
+
+        const config = {
+            x: 0,
+            y: 0,
+            duration: 0,
+            easing: 'linear',
+            relative: false,
+            onUpdate: null,
+            onComplete: null,
+            ...options
+        };
+
+        const entity = config.entity;
+        if (!entity || !this.engine.isEntity(entity))
+            throw new Error('Entity is required');
+
+        const body = this.bodies.get(entity.id);
         if (!body) return false;
 
         try {
-            // If relative movement is needed
-            if (relative) {
-                const currentPos = body.GetPosition();
-                position = {
-                    x: (currentPos.x * this.SCALE + position.x),
-                    y: (currentPos.y * this.SCALE + position.y)
-                };
+            /* ---------- helpers to swap body type ---------- */
+            const makeKinematic = () => {
+                if (body.GetType() === Box2D.Dynamics.b2Body.b2_staticBody) {
+                    body.SetType(Box2D.Dynamics.b2Body.b2_kinematicBody);
+                    return true;
+                }
+                return false;
+            };
+            const restoreType = (wasStatic) => {
+                if (wasStatic) body.SetType(Box2D.Dynamics.b2Body.b2_staticBody);
+                body.SetAwake(true);
+            };
+
+            /* ---------- starting position (world pixels) ---------- */
+            const currentPos = body.GetPosition();
+            const startPos = {
+                x: currentPos.x * this.SCALE,
+                y: currentPos.y * this.SCALE
+            };
+
+            /* ---------- target position (pixels) ---------- */
+            let target = {x: config.x, y: config.y};
+            if (config.relative) {
+                target.x += startPos.x;
+                target.y += startPos.y;
             }
 
-            // Convert coordinates from pixels to meters (Box2D scale)
-            const newPosition = new Box2D.Common.Math.b2Vec2(
-                position.x / this.SCALE,
-                position.y / this.SCALE
-            );
-
-            // If the body is static, it needs to be converted to kinematic first
-            const wasStatic = body.GetType() === Box2D.Dynamics.b2Body.b2_staticBody;
-            if (wasStatic) {
-                body.SetType(Box2D.Dynamics.b2Body.b2_kinematicBody);
+            /* ---------- instantaneous move ---------- */
+            if (!config.duration) {
+                const newPos = new Box2D.Common.Math.b2Vec2(
+                    target.x / this.SCALE,
+                    target.y / this.SCALE
+                );
+                const wasStatic = makeKinematic();
+                body.SetPosition(newPos);
+                restoreType(wasStatic);
+                config.onComplete?.(entity);
+                return true;
             }
 
-            // Perform the movement
-            body.SetPosition(newPosition);
+            /* ---------- animated move ---------- */
+            let startTime = performance.now();
+            let pausedAt = 0;
+            let totalPause = 0;
 
-            // Return to static state if it was static before
-            if (wasStatic) {
-                body.SetType(Box2D.Dynamics.b2Body.b2_staticBody);
-            }
+            const deltaX = target.x - startPos.x;
+            const deltaY = target.y - startPos.y;
 
-            // Update entity to synchronize with new position
-            if (entity.style) {
-                entity.style({
-                    x: position.x - entity.width / 2,
-                    y: position.y - entity.height / 2
-                });
-            }
+            const easingFunction =
+                typeof config.easing === 'function'
+                    ? config.easing
+                    : (this.engine.Ease?.[config.easing] || this.engine.Ease.linear);
 
-            // To ensure changes are applied
-            body.SetAwake(true);
+            const animate = (now) => {
+                /* ---- engine paused -> record pause start ---- */
+                if (!this.engine.running) {
+                    if (pausedAt === 0) pausedAt = now;
+                    requestAnimationFrame(animate);
+                    return;
+                }
 
+                /* ---- just resumed -> update total paused time ---- */
+                if (pausedAt !== 0) {
+                    totalPause += now - pausedAt;
+                    pausedAt = 0;
+                }
+
+                const adjustedNow = now - totalPause;
+                const elapsed = adjustedNow - startTime;
+
+                /* ---- final frame ---- */
+                if (elapsed >= config.duration) {
+                    const finalPos = new Box2D.Common.Math.b2Vec2(
+                        target.x / this.SCALE,
+                        target.y / this.SCALE
+                    );
+                    const wasStatic = makeKinematic();
+                    body.SetPosition(finalPos);
+                    restoreType(wasStatic);
+                    config.onComplete?.(entity);
+                    return;
+                }
+
+                /* ---- interpolate ---- */
+                const progress = elapsed / config.duration;
+                const eased = easingFunction(progress);
+
+                const newPos = new Box2D.Common.Math.b2Vec2(
+                    (startPos.x + deltaX * eased) / this.SCALE,
+                    (startPos.y + deltaY * eased) / this.SCALE
+                );
+
+                const wasStatic = makeKinematic();
+                body.SetPosition(newPos);
+                restoreType(wasStatic);
+
+                config.onUpdate?.(entity, eased);
+
+                /* ---- keep looping ---- */
+                requestAnimationFrame(animate);
+            };
+
+            requestAnimationFrame(animate);
             return true;
-        } catch (error) {
-            this.engine.error('Error moving entity:', error);
+        } catch (err) {
+            this.engine.warn('Error moving entity:', err);
             return false;
         }
     }
@@ -466,15 +555,18 @@ class Physics {
         }
         return this;
     }
-    setGravity (x, y) {
+    setGravity (x, y = 0) {
+        if (x === false) {
+            x = 0;
+            y = 0;
+        }
         this.world.SetGravity(new Box2D.Common.Math.b2Vec2(x / this.SCALE, y / this.SCALE));
 
-        for (const [entityId, body] of this.bodies) {
+        for (const [, body] of this.bodies) {
             if (body.GetType() !== Box2D.Dynamics.b2Body.b2_staticBody) {
                 this.applyImpulse(body.GetUserData(), {x: 0.0001, y: 0.0001});
             }
         }
-
         return this;
     }
     getBodyVelocity (entity) {
@@ -544,114 +636,6 @@ class Physics {
     /** ======== END BODY CONTROL ======== */
 
     /** ======== DRAG & DROP ======== */
-    _startDrag (targetEntity, mouseX, mouseY, identifier) {
-        const body = this.bodies.get(targetEntity.id);
-        if (!body || this.mouseJoints.has(identifier) || this.bodyTouchMap.has(targetEntity.id)) return;
-
-        // Store the original body type
-        const originalType = body.GetType();
-
-        // Temporarily change to dynamic body for dragging
-        if (originalType !== Box2D.Dynamics.b2Body.b2_dynamicBody) {
-            body.SetType(Box2D.Dynamics.b2Body.b2_dynamicBody);
-        }
-
-        const mouseWorldPoint = new Box2D.Common.Math.b2Vec2(
-            mouseX / this.SCALE,
-            mouseY / this.SCALE
-        );
-
-        const jointDef = new Box2D.Dynamics.Joints.b2MouseJointDef();
-        const groundBody = this.world.CreateBody(new Box2D.Dynamics.b2BodyDef());
-
-        jointDef.bodyA = groundBody;
-        jointDef.bodyB = body;
-        jointDef.target.Set(mouseWorldPoint.x, mouseWorldPoint.y);
-        jointDef.maxForce = 1000 * body.GetMass();
-        jointDef.collideConnected = true;
-        jointDef.dampingRatio = 0.5;
-        jointDef.frequencyHz = 5.0;
-
-        const mouseJoint = this.world.CreateJoint(jointDef);
-
-        this.mouseJoints.set(identifier, mouseJoint);
-        this.draggedBodies.set(identifier, {
-            body: body,
-            entity: targetEntity,
-            originalType: originalType // Store the original type
-        });
-        this.bodyTouchMap.set(targetEntity.id, identifier);
-
-        body.SetAngularDamping(0.1);
-        body.SetLinearDamping(0.1);
-        body.SetFixedRotation(true);
-
-        if (typeof targetEntity.trigger === 'function') {
-            targetEntity.trigger('drag', {
-                x: mouseX,
-                y: mouseY,
-                identifier
-            });
-        }
-    }
-    _updateDrag (mouseX, mouseY, identifier) {
-        const mouseJoint = this.mouseJoints.get(identifier);
-        const dragBodyData = this.draggedBodies.get(identifier);
-        if (!mouseJoint || !dragBodyData) return;
-
-        const mouseWorldPoint = new Box2D.Common.Math.b2Vec2(
-            mouseX / this.SCALE,
-            mouseY / this.SCALE
-        );
-
-        mouseJoint.SetTarget(mouseWorldPoint);
-
-        const {body, entity} = dragBodyData;
-        if (typeof entity.trigger === 'function') {
-            entity.trigger('dragMove', {
-                x: mouseX,
-                y: mouseY,
-                identifier
-            });
-        }
-    }
-    _endDrag (identifier) {
-        const mouseJoint = this.mouseJoints.get(identifier);
-        const dragBodyData = this.draggedBodies.get(identifier);
-
-        if (!mouseJoint || !dragBodyData) return;
-
-        const {body, entity, originalType} = dragBodyData;
-
-        body.SetFixedRotation(false);
-        body.SetAngularDamping(0.1);
-        body.SetLinearDamping(0.1);
-
-        // If it was originally kinematic, reset velocities before changing type
-        if (originalType === Box2D.Dynamics.b2Body.b2_kinematicBody) {
-            body.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
-            body.SetAngularVelocity(0);
-        }
-
-        // Restore the original body type
-        if (originalType !== Box2D.Dynamics.b2Body.b2_dynamicBody) {
-            body.SetType(originalType);
-        }
-
-        if (typeof entity.trigger === 'function') {
-            const position = body.GetPosition();
-            entity.trigger('drop', {
-                x: position.x * this.SCALE,
-                y: position.y * this.SCALE,
-                identifier
-            });
-        }
-
-        this.world.DestroyJoint(mouseJoint);
-        this.mouseJoints.delete(identifier);
-        this.draggedBodies.delete(identifier);
-        this.bodyTouchMap.delete(entity.id);
-    }
     _setupDragListeners () {
         let hoveredEntity = null;
         let touchStartTime = 0;
@@ -843,6 +827,117 @@ class Physics {
             }
         });
     }
+    _startDrag (targetEntity, mouseX, mouseY, identifier) {
+        const body = this.bodies.get(targetEntity.id);
+        if (!body || this.mouseJoints.has(identifier) || this.bodyTouchMap.has(targetEntity.id)) return;
+
+        // Store the original body type
+        const originalType = body.GetType();
+
+        // Temporarily change to dynamic body for dragging
+        if (originalType !== Box2D.Dynamics.b2Body.b2_dynamicBody) {
+            body.SetType(Box2D.Dynamics.b2Body.b2_dynamicBody);
+        }
+
+        const mouseWorldPoint = new Box2D.Common.Math.b2Vec2(
+            mouseX / this.SCALE,
+            mouseY / this.SCALE
+        );
+
+        const jointDef = new Box2D.Dynamics.Joints.b2MouseJointDef();
+        const groundBody = this.world.CreateBody(new Box2D.Dynamics.b2BodyDef());
+
+        jointDef.bodyA = groundBody;
+        jointDef.bodyB = body;
+        jointDef.target.Set(mouseWorldPoint.x, mouseWorldPoint.y);
+        jointDef.maxForce = 1000 * body.GetMass();
+        jointDef.collideConnected = true;
+        jointDef.dampingRatio = 0.5;
+        jointDef.frequencyHz = 5.0;
+
+        const mouseJoint = this.world.CreateJoint(jointDef);
+
+        this.mouseJoints.set(identifier, mouseJoint);
+        this.draggedBodies.set(identifier, {
+            body: body,
+            entity: targetEntity,
+            originalType: originalType // Store the original type
+        });
+        this.bodyTouchMap.set(targetEntity.id, identifier);
+
+        body.SetAngularDamping(0.1);
+        body.SetLinearDamping(0.1);
+        body.SetFixedRotation(true);
+
+        // Stop moving
+        targetEntity.halt();
+
+        if (typeof targetEntity.trigger === 'function') {
+            targetEntity.trigger('drag', {
+                x: mouseX,
+                y: mouseY,
+                identifier
+            });
+        }
+    }
+    _updateDrag (mouseX, mouseY, identifier) {
+        const mouseJoint = this.mouseJoints.get(identifier);
+        const dragBodyData = this.draggedBodies.get(identifier);
+        if (!mouseJoint || !dragBodyData) return;
+
+        const mouseWorldPoint = new Box2D.Common.Math.b2Vec2(
+            mouseX / this.SCALE,
+            mouseY / this.SCALE
+        );
+
+        mouseJoint.SetTarget(mouseWorldPoint);
+
+        const {body, entity} = dragBodyData;
+        if (typeof entity.trigger === 'function') {
+            entity.trigger('dragMove', {
+                x: mouseX,
+                y: mouseY,
+                identifier
+            });
+        }
+    }
+    _endDrag (identifier) {
+        const mouseJoint = this.mouseJoints.get(identifier);
+        const dragBodyData = this.draggedBodies.get(identifier);
+
+        if (!mouseJoint || !dragBodyData) return;
+
+        const {body, entity, originalType} = dragBodyData;
+
+        body.SetFixedRotation(false);
+        body.SetAngularDamping(0.1);
+        body.SetLinearDamping(0.1);
+
+        // If it was originally kinematic, reset velocities before changing type
+        if (originalType === Box2D.Dynamics.b2Body.b2_kinematicBody) {
+            body.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
+            body.SetAngularVelocity(0);
+        }
+
+        // Restore the original body type
+        if (originalType !== Box2D.Dynamics.b2Body.b2_dynamicBody) {
+            body.SetType(originalType);
+        }
+
+        if (typeof entity.trigger === 'function') {
+            const position = body.GetPosition();
+            entity.trigger('drop', {
+                x: position.x * this.SCALE,
+                y: position.y * this.SCALE,
+                identifier
+            });
+        }
+
+        this.world.DestroyJoint(mouseJoint);
+        this.mouseJoints.delete(identifier);
+        this.draggedBodies.delete(identifier);
+        this.bodyTouchMap.delete(entity.id);
+    }
     _isPointInEntity (x, y, entity) {
         const body = this.bodies.get(entity.id);
         if (!body) return false;
@@ -865,6 +960,78 @@ class Physics {
         return false;
     }
     /** ======== END DRAG & DROP ======== */
+
+    /** ======== RESET ======== */
+    reset () {
+        try {
+            // Clear all drag operations
+            for (const [identifier, mouseJoint] of this.mouseJoints) {
+                this.world.DestroyJoint(mouseJoint);
+            }
+            this.mouseJoints.clear();
+            this.draggedBodies.clear();
+            this.bodyTouchMap.clear();
+
+            for (const [entityId, body] of this.bodies) {
+                // Stop moving
+                pixalo.find(entityId).halt();
+
+                // Destroy body
+                this.world.DestroyBody(body);
+            }
+
+            // Clear internal maps
+            this.bodies.clear();
+            this.velocities.clear();
+            this.materials.clear();
+
+            // Recreate world with original settings
+            this.world = new Box2D.Dynamics.b2World(
+                new Box2D.Common.Math.b2Vec2(
+                    this.originalConfig.gravity.x / this.SCALE,
+                    this.originalConfig.gravity.y / this.SCALE
+                ),
+                this.originalConfig.sleep
+            );
+
+            // Reset config to original values
+            this.config = {
+                friction: this.originalConfig.friction,
+                restitution: this.originalConfig.restitution,
+                density: this.originalConfig.density,
+                maxVelocity: this.originalConfig.maxVelocity,
+                velocityIterations: this.originalConfig.velocityIterations,
+                positionIterations: this.originalConfig.positionIterations
+            };
+
+            // Reset scale values
+            this.BASE_SCALE = this.originalConfig.scale;
+            this.quality = this.originalConfig.quality;
+            this.SCALE = this.BASE_SCALE * this.quality;
+
+            // Reset mouse world position
+            this.mouseWorld.Set(0, 0);
+
+            // Recreate contact listener
+            this._setupContactListener();
+
+            // Trigger reset event
+            if (this.engine && typeof this.engine.trigger === 'function') {
+                this.engine.trigger('physicsReset', {
+                    timestamp: Date.now(),
+                    config: this.originalConfig
+                });
+            }
+
+            return this;
+        } catch (error) {
+            if (this.engine && typeof this.engine.error === 'function') {
+                this.engine.error('Error during physics reset:', error);
+            }
+            return false;
+        }
+    }
+    /** ======== END ======== */
 
 }
 

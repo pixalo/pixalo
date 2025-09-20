@@ -3,7 +3,7 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-import Collision from "./Collision.js";
+import Collision from './Collision.js';
 
 class Utils {
 
@@ -54,6 +54,7 @@ class Utils {
             height: height
         });
     }
+    /** ======== END ======== */
 
     /** ======== ENTITIES ======== */
     getSortedEntitiesForInteraction () {
@@ -130,6 +131,7 @@ class Utils {
                 return Math.abs(localX) <= scaledWidth / 2 && Math.abs(localY) <= scaledHeight / 2;
         }
     }
+    /** ======== END ======== */
 
     /** ======== TOUCHES ======== */
     _handleTouchStart (e) {
@@ -277,6 +279,7 @@ class Utils {
     _handleTouchCancel (e) {
         this.handleTouchEnd(e);
     }
+    /** ======== END ======== */
 
     /** ======== MOUSE ======== */
     _handleMouseDown (e) {
@@ -407,6 +410,7 @@ class Utils {
             }
         }
     }
+    /** ======== END ======== */
 
     /** ======== CLICK ======== */
     _handleClick (e) {
@@ -418,7 +422,7 @@ class Utils {
     }
     _handleClicks (e, trigger) {
         e?.preventDefault?.();
-        setTimeout(() => this.canvas?.focus?.(), 0);
+        this.timeout(() => this.canvas?.focus?.(), 0);
 
         if (!this.running) return;
 
@@ -443,6 +447,7 @@ class Utils {
 
         this.trigger(trigger, eventData);
     }
+    /** ======== END ======== */
 
     /** ======== KEYS ======== */
     pressedKeys = new Set();
@@ -469,6 +474,9 @@ class Utils {
         'end': 'end'
     };
 
+    isKeyPressed (...keys) {
+        return keys.some(k => this.pressedKeys.has(k));
+    }
     #normalizeKey (key) {
         return this.keyMap[key.toLowerCase()] || key.toLowerCase();
     }
@@ -657,20 +665,6 @@ class Utils {
     }
     /** ======== END ======== */
 
-    static dataURLToBlob (dataURL) {
-        const arr = dataURL.split(',');
-        const mime = arr[0].match(/:(.*?);/)[1];
-        const bstr = atob(arr[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-
-        while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
-        }
-
-        return new Blob([u8arr], {type: mime});
-    }
-
     async wait (...args) {
         if (args.length === 0)
             return [];
@@ -700,6 +694,53 @@ class Utils {
         }
 
         return promises;
+    }
+
+    static dataURLToBlob (dataURL) {
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+
+        return new Blob([u8arr], {type: mime});
+    }
+
+    static scriptToUrl (script) {
+        try {
+            new URL(script);
+            return script;
+        } catch { /* not a full url */ }
+
+        const isFn = v => typeof v === 'function';
+
+        /** Function */
+        if (isFn(script))
+            script = `${script.toString()}()`;
+
+        /** Path */
+        else if (/^(?:\.\/|\.\.\/|\/|[^/]*\.[a-zA-Z0-9]{1,5}$)/.test(script) && !/\s/.test(script))
+            return script;
+
+        /** Function Name */
+        else if (/^[a-zA-Z_$][\w$]*$/.test(String(script).trim())) {
+            const fnName = String(script).trim();
+            const fn = globalThis[fnName];
+            if (isFn(fn))
+                script = `(${fn.toString()})();`; // IIFE
+        }
+
+        /** Script */
+        else if (/[(){}\[\];=>]/.test(script) || /\b(function|=>|var|let|const|if|for|while|return)\b/.test(script)) {/** Nothing */}
+
+        else throw new Error(`${script} is not valid`);
+
+        const blob = new Blob([script], {type: 'application/javascript'});
+        return URL.createObjectURL(blob);
     }
 
 }

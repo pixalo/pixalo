@@ -9,18 +9,33 @@ class Camera {
     constructor (engine, config = {}) {
         this.engine = engine;
 
-        this.x = config.x || 0;
-        this.y = config.y || 0;
-        this.zoom = config.zoom || 1;
+        this.config = {
+            x: config.x || 0,
+            y: config.y || 0,
+            zoom: config.zoom || 1,
+            bounds: config.bounds || null,
+            minZoom: config.minZoom || 0.1,
+            maxZoom: config.maxZoom || 5,
+            smoothing: config.smoothing ?? true,
+            smoothSpeed: config.smoothSpeed || 0.1,
+            rotation: config.rotation || 0
+        };
+
+        // Store original config for reset functionality
+        this._originalConfig = {...this.config};
+
+        this.x = this.config.x;
+        this.y = this.config.y;
+        this.zoom = this.config.zoom;
 
         // Camera limitations
-        this.bounds = config.bounds || null;
-        this.minZoom = config.minZoom || 0.1;
-        this.maxZoom = config.maxZoom || 5;
+        this.bounds = this.config.bounds;
+        this.minZoom = this.config.minZoom;
+        this.maxZoom = this.config.maxZoom;
 
         // Smooth motion settings
-        this.smoothing = config.smoothing ?? true;
-        this.smoothSpeed = config.smoothSpeed || 0.1;
+        this.smoothing = this.config.smoothing;
+        this.smoothSpeed = this.config.smoothSpeed;
 
         this._targetX = this.x;
         this._targetY = this.y;
@@ -47,7 +62,7 @@ class Camera {
             cinematic: null
         };
 
-        this.rotation = config.rotation || 0; // Current rotation angle
+        this.rotation = this.config.rotation; // Current rotation angle
         this._targetRotation = this.rotation; // Target angle for rotation
         this._lastRotation = this.rotation;   // Previous angle to calculate changes
         this.deltaRotation = 0;               // The amount of change in rotation
@@ -121,25 +136,21 @@ class Camera {
             y: this.y + viewportHeight / 2
         };
     }
-    zoomTo (zoom, centerX, centerY, duration = 500, easing = 'easeInOutCubic') {
-        if (typeof zoom === 'object') {
+    zoomTo (zoom, centerX = null, centerY = null, duration = 500, easing = 'easeInOutCubic') {
+        if (typeof zoom === 'object')
             ({zoom, centerX, centerY, duration = 500, easing = 'easeInOutCubic'} = zoom);
-        }
 
         // Limit zoom to allowed values
         zoom = Math.min(Math.max(zoom, this.minZoom), this.maxZoom);
+
+        const center = this.getCurrentCenter();
+        centerX = centerX ?? center.x;
+        centerY = centerY ?? center.y;
 
         const startZoom = this.zoom;
         const startX = this.x;
         const startY = this.y;
         const startTime = Date.now();
-
-        // If the zoom center is not specified, we use the current center of the viewport.
-        if (centerX === undefined || centerY === undefined) {
-            const center = this.getCurrentCenter();
-            centerX = center.x;
-            centerY = center.y;
-        }
 
         // Calculating the new position while preserving the zoom point
         const startViewportWidth = this.engine.baseWidth / startZoom;
@@ -237,10 +248,10 @@ class Camera {
         animate();
         return this;
     }
-    zoomToLevel (zoom, centerX, centerY, duration = 500, easing = 'easeInOutCubic') {
+    zoomToLevel (zoom, centerX = null, centerY = null, duration = 500, easing = 'easeInOutCubic') {
         return this.zoomTo(zoom, centerX, centerY, duration, easing);
     }
-    zoomBy (factor, centerX, centerY, duration = 500, easing = 'easeInOutCubic') {
+    zoomBy (factor, centerX = null, centerY = null, duration = 500, easing = 'easeInOutCubic') {
         return this.zoomTo(this.zoom * factor, centerX, centerY, duration, easing);
     }
     zoomAtPoint (factor, screenX, screenY, duration = 500, easing = 'easeInOutCubic') {
@@ -361,7 +372,8 @@ class Camera {
     }
     /** ======== END ======== */
 
-    apply (ctx) {
+    apply () {
+        const ctx = this.engine.ctx;
         ctx.save();
         ctx.translate(this.engine.baseWidth / 2, this.engine.baseHeight / 2);
         ctx.rotate(this.rotation * Math.PI / 180);
@@ -370,9 +382,6 @@ class Camera {
             -this.engine.baseWidth / (2 * this.zoom) - this.x,
             -this.engine.baseHeight / (2 * this.zoom) - this.y
         );
-    }
-    restore (ctx) {
-        ctx.restore();
     }
     update () {
         this._lastRotation = this.rotation;
@@ -422,7 +431,7 @@ class Camera {
 
         // Applying restrictions
         this._enforceBounds();
-        this.updateEffects(this.engine.ctx);
+        this._updateEffects(this.engine.ctx);
     }
 
     /** ======== CONVERT TO (SCREEN, WORLD) ======== */
@@ -874,13 +883,66 @@ class Camera {
 
         return this;
     }
-    updateEffects (ctx) {
+    _updateEffects (ctx) {
         // Update all active effects
         for (const [name, effect] of Object.entries(this._effects)) {
             if (effect && !effect.animate(ctx)) {
                 this._effects[name] = null;
             }
         }
+    }
+    /** ======== END ======== */
+
+    /** ======== RESET ======== */
+    reset () {
+        // Reset position and zoom
+        this.x = this._originalConfig.x;
+        this.y = this._originalConfig.y;
+        this.zoom = this._originalConfig.zoom;
+        this.rotation = this._originalConfig.rotation;
+
+        // Reset target values
+        this._targetX = this.x;
+        this._targetY = this.y;
+        this._targetZoom = this.zoom;
+        this._targetRotation = this.rotation;
+
+        // Reset last values
+        this._lastX = this.x;
+        this._lastY = this.y;
+        this._lastZoom = this.zoom;
+        this._lastRotation = this.rotation;
+
+        // Reset deltas
+        this.deltaX = 0;
+        this.deltaY = 0;
+        this.deltaZoom = 0;
+        this.deltaRotation = 0;
+
+        // Reset camera limitations
+        this.bounds = this._originalConfig.bounds;
+        this.minZoom = this._originalConfig.minZoom;
+        this.maxZoom = this._originalConfig.maxZoom;
+
+        // Reset smooth motion settings
+        this.smoothing = this._originalConfig.smoothing;
+        this.smoothSpeed = this._originalConfig.smoothSpeed;
+
+        // Cancel follow
+        this.cancelFollow();
+
+        // Clear all states
+        this._states.clear();
+
+        // Clear all effects
+        this._effects = {
+            shake: null,
+            flash: null,
+            fade: null,
+            cinematic: null
+        };
+
+        return this;
     }
     /** ======== END ======== */
 
