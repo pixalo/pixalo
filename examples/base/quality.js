@@ -1,9 +1,19 @@
+/**
+ * Copyright (c) 2025 Pixalo
+ *
+ * @Repository: https://github.com/pixalo
+ * @License: MIT
+ * @Author:
+ *    - Salar Izadi
+ *    - https://github.com/salarizadi
+ */
 import Pixalo from '../../src/Pixalo.js';
 
 const game = new Pixalo('#canvas', {
     width: window.innerWidth,
     height: window.innerHeight,
-    fps: 60
+    fps: 60,
+    quality: window.devicePixelRatio
 });
 game.start();
 

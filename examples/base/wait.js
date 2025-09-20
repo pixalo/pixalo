@@ -1,4 +1,13 @@
-import Pixalo from "../../src/Pixalo.js";
+/**
+ * Copyright (c) 2025 Pixalo
+ *
+ * @Repository: https://github.com/pixalo
+ * @License: MIT
+ * @Author:
+ *    - Salar Izadi
+ *    - https://github.com/salarizadi
+ */
+import Pixalo from '../../src/Pixalo.js';
 
 const game = new Pixalo('#canvas', {
     width: window.innerWidth,

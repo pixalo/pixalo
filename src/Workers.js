@@ -3,8 +3,8 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-import Pixalo from "./Pixalo.js";
-import AudioManager from "./AudioManager.js";
+import Pixalo from './Pixalo.js';
+import AudioManager from './AudioManager.js';
 
 class Workers {
 
@@ -27,7 +27,7 @@ class Workers {
         const wid = `worker_${Math.floor(Math.random() * 99999)}`;
         const offscreen = canvas.transferControlToOffscreen();
 
-        script = Workers.scriptToUrl(script);
+        script = Pixalo.scriptToUrl(script);
 
         const worker = new Worker(script, {type: options.type || 'module'});
         worker.postMessage({
@@ -70,39 +70,6 @@ class Workers {
             workerData.worker.terminate();
             this.workers.delete(wid);
         }
-    }
-
-    static scriptToUrl (script) {
-        try {
-            new URL(script);
-            return script;
-        } catch { /* not a full url */ }
-
-        const isFn = v => typeof v === 'function';
-
-        /** Function */
-        if (isFn(script))
-            script = `${script.toString()}()`;
-
-        /** Path */
-        else if (/^(?:\.\/|\.\.\/|\/|[^/]*\.[a-zA-Z0-9]{1,5}$)/.test(script) && !/\s/.test(script))
-            return script;
-
-        /** Function Name */
-        else if (/^[a-zA-Z_$][\w$]*$/.test(String(script).trim())) {
-            const fnName = String(script).trim();
-            const fn = globalThis[fnName];
-            if (isFn(fn))
-                script = `(${fn.toString()})();`; // IIFE
-        }
-
-        /** Script */
-        else if (/[(){}\[\];=>]/.test(script) || /\b(function|=>|var|let|const|if|for|while|return)\b/.test(script)) {/** Nothing */}
-
-        else throw new Error(`${script} is not valid`);
-
-        const blob = new Blob([script], {type: 'application/javascript'});
-        return URL.createObjectURL(blob);
     }
 
     static #handleMessage (event) {

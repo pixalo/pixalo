@@ -9,9 +9,9 @@ The Collision class is a comprehensive collision detection system that handles c
 Updates collision detection for all provided entities and triggers collision events.
 > :warning: This method is automatically called in the Pixalo class. You don't need to call this method unless you want to do customization elsewhere.
 
-| Name | Type | Default |
-|------|------|---------|
-| entities | Array | - |
+| Name     | Type  | Default |
+|----------|-------|---------|
+| entities | Array | -       |
 
 **Usage Example:**
 ```javascript
@@ -23,10 +23,10 @@ game.collision.updateCollisions([entity1, entity2, entity3]);
 
 Performs detailed collision detection between two entities and returns comprehensive collision information.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity1 | Object | - |
-| entity2 | Object | - |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| entity1 | Object | -       |
+| entity2 | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -40,10 +40,10 @@ if (collisionInfo.colliding) {
 
 Specialized collision detection method for circular entities.
 
-| Name | Type | Default |
-|------|------|---------|
-| circle1 | Object | - |
-| circle2 | Object | - |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| circle1 | Object | -       |
+| circle2 | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -57,13 +57,13 @@ if (result.colliding) {
 
 Performs Separating Axis Theorem collision detection between two sets of vertices.
 
-| Name | Type | Default |
-|------|------|---------|
-| vertices1 | Array | - |
-| vertices2 | Array | - |
-| entity1 | Object | - |
-| entity2 | Object | - |
-| threshold | Number | 0 |
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| vertices1 | Array  | -       |
+| vertices2 | Array  | -       |
+| entity1   | Object | -       |
+| entity2   | Object | -       |
+| threshold | Number | 0       |
 
 **Usage Example:**
 ```javascript
@@ -76,11 +76,11 @@ const collision = game.collision.detectSATCollision(vertices1, vertices2, entity
 
 Performs Axis-Aligned Bounding Box collision detection for quick collision filtering.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity1 | Object | - |
-| entity2 | Object | - |
-| threshold | Number | 0 |
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| entity1   | Object | -       |
+| entity2   | Object | -       |
+| threshold | Number | 0       |
 
 **Usage Example:**
 ```javascript
@@ -94,9 +94,9 @@ if (hasAABBCollision) {
 
 Retrieves or calculates the vertices for an entity based on its shape and transformations.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | Object | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -108,9 +108,9 @@ console.log('Entity vertices:', vertices);
 
 Generates vertices for star-shaped entities with configurable spikes.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | Object | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -121,10 +121,10 @@ const starVertices = game.collision.getStarVertices(starEntity);
 
 Generates vertices for circular entities by approximating the circle with polygon segments.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | Object | - |
-| segments | Number | 16 |
+| Name     | Type   | Default |
+|----------|--------|---------|
+| entity   | Object | -       |
+| segments | Number | 16      |
 
 **Usage Example:**
 ```javascript
@@ -135,9 +135,9 @@ const circleVertices = game.collision.getCircleVertices(ball, 24);
 
 Generates vertices for triangular entities.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | Object | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -148,10 +148,10 @@ const triangleVertices = game.collision.getTriangleVertices(triangleEntity);
 
 Generates vertices for rectangular entities with optional rounded corners.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | Object | - |
-| radius | Number | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
+| radius | Number | -       |
 
 **Usage Example:**
 ```javascript
@@ -162,9 +162,9 @@ const rectVertices = game.collision.getRectangleVertices(box, 10);
 
 Generates vertices for entities with custom path shapes by sampling points from the path.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | Object | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -175,10 +175,10 @@ const customVertices = game.collision.getCustomPathVertices(customShapeEntity);
 
 Applies transformations (rotation, scaling, skewing, positioning) to a set of vertices.
 
-| Name | Type | Default |
-|------|------|---------|
-| vertices | Array | - |
-| entity | Object | - |
+| Name     | Type   | Default |
+|----------|--------|---------|
+| vertices | Array  | -       |
+| entity   | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -190,10 +190,10 @@ const transformedVertices = game.collision.applyTransformations(originalVertices
 
 Finds the approximate collision point between two sets of vertices.
 
-| Name | Type | Default |
-|------|------|---------|
-| vertices1 | Array | - |
-| vertices2 | Array | - |
+| Name      | Type  | Default |
+|-----------|-------|---------|
+| vertices1 | Array | -       |
+| vertices2 | Array | -       |
 
 **Usage Example:**
 ```javascript
@@ -205,9 +205,9 @@ console.log('Collision occurred at:', collisionPoint);
 
 Calculates the Axis-Aligned Bounding Box for an entity.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | Object | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -219,9 +219,9 @@ console.log('AABB:', boundingBox); // {minX, minY, maxX, maxY}
 
 Removes an entity from collision tracking and cleans up related data.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | Object | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
 
 **Usage Example:**
 ```javascript
@@ -233,9 +233,9 @@ game.collision.remove(destroyedEnemy);
 
 Clears cached collision data for a specific entity.
 
-| Name | Type | Default |
-|------|------|---------|
-| entityId | String/Number | - |
+| Name     | Type          | Default |
+|----------|---------------|---------|
+| entityId | String/Number | -       |
 
 **Usage Example:**
 ```javascript
@@ -269,12 +269,12 @@ These events are automatically triggered by the Pixalo framework and provide det
 
 Checks if a point is within or on the boundary of a shape defined by collision points.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | Number | - |
-| y | Number | - |
-| points | Array | - |
-| tolerance | Number | 2 |
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| x         | Number | -       |
+| y         | Number | -       |
+| points    | Array  | -       |
+| tolerance | Number | 2       |
 
 **Usage Example:**
 ```javascript
@@ -285,12 +285,12 @@ const isInside = game.collision.constructor.isPointInCollisionPoints(100, 150, s
 
 Checks if a point is inside a triangle with specified dimensions.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | Number | - |
-| y | Number | - |
-| width | Number | - |
-| height | Number | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| x      | Number | -       |
+| y      | Number | -       |
+| width  | Number | -       |
+| height | Number | -       |
 
 **Usage Example:**
 ```javascript
@@ -301,10 +301,10 @@ const isInTriangle = game.collision.constructor.isPointInTriangle(50, 25, 100, 1
 
 Optimizes collision points by removing points that are too close together.
 
-| Name | Type | Default |
-|------|------|---------|
-| points | Array | - |
-| minDistance | Number | 5 |
+| Name        | Type   | Default |
+|-------------|--------|---------|
+| points      | Array  | -       |
+| minDistance | Number | 5       |
 
 **Usage Example:**
 ```javascript

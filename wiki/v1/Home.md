@@ -3,17 +3,17 @@
 A powerful and flexible 2D game engine built with JavaScript, designed for creating interactive web games and applications.
 
 ## ✨ Features
-
 - 🎯 High-performance 2D rendering system
 - 🏃 Advanced animation support with keyframes
 - 🎨 Background layer management
 - 📐 Grid system with customizable properties
 - 🔄 Sprite sheet and asset management
 - 💥 Collision detection system
-- 🎵 Audio management with categories and effects
+- 🎵 Audio management with spatial controls
 - 🗺️ Tile map system for level design
 - 🎆 Particle emitter system
 - 📸 Screenshot functionality
+- 📹 Camera system with zoom, rotation, and cinematic presets
 - 🎚️ Quality control and scaling
 - 🐞 Built-in debugging tools
 
@@ -21,23 +21,23 @@ A powerful and flexible 2D game engine built with JavaScript, designed for creat
 
 ### Using bundled version
 ```html
-<script src="pixalo.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/pixalo/pixalo/dist/pixalo.bundle.js"></script>
 ```
 
 ### Using ES modules
 ```javascript
 // ESM import
-import Pixalo from 'pixalo.esm.js';
+import Pixalo from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo/dist/pixalo.esm.js';
 ```
 
 ### Using UMD
 ```javascript
 // UMD import
-import Pixalo from 'pixalo.umd.js';
+import Pixalo from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo/dist/pixalo.umd.js';
 ```
 OR
 ```html
-<script src="pixalo.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/pixalo/pixalo/dist/pixalo.umd.js"></script>
 ```
 
 ### Direct source import

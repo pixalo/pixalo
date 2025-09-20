@@ -2,15 +2,15 @@ The Workers class is a static utility class that manages Web Workers for offscre
 
 ## Public Methods
 
-### `register(selector, scriptURL, options): string`
+### `register(selector, script, options): string`
 
 Registers a canvas element with a Web Worker for offscreen rendering and returns a unique worker ID.
 
-| Name | Type | Default |
-|------|------|---------|
-| selector | string \| HTMLCanvasElement | - |
-| scriptURL | string | - |
-| options | object | {} |
+| Name     | Type                               | Default |
+|----------|------------------------------------|---------|
+| selector | string \| HTMLCanvasElement        | -       |
+| script   | string \| function \| FunctionName | -       |
+| options  | object                             | {}      |
 
 **Options object properties:**
 - `type`: string - Worker type ('module' or 'classic'), defaults to 'module'
@@ -18,12 +18,33 @@ Registers a canvas element with a Web Worker for offscreen rendering and returns
 - `onerror`: function - Custom error handler for worker errors
 
 ```javascript
-// Register with canvas selector
-const workerId = Workers.register('#myCanvas', './game.js');
-
-// Register with canvas element and options
 const canvas = document.getElementById('myCanvas');
-const workerId = Workers.register(canvas, './game.js', {
+
+// Register with canvas selector
+const workerId = Workers.register(canvas, './game.js');
+```
+
+```javascript
+// Register with canvas element and options
+const workerId = Workers.register('#myCanvas', './game.js', {
+    type: 'module',
+    onmessage: (event) => console.log('Worker message:', event.data),
+    onerror: (error) => console.error('Worker error:', error)
+});
+```
+
+```javascript
+const script = `
+import Pixalo from './src/Pixalo.js';
+
+(${()=> {
+    globalThis.game = new Pixalo({
+        background: 'white',
+        quality: 1.5,
+        resizeTarget: 'window',
+    });
+}})();`
+const workerId = Workers.register('#myCanvas', script, {
     type: 'module',
     onmessage: (event) => console.log('Worker message:', event.data),
     onerror: (error) => console.error('Worker error:', error)
@@ -34,10 +55,10 @@ const workerId = Workers.register(canvas, './game.js', {
 
 Sends a message to a specific worker identified by its worker ID.
 
-| Name | Type | Default |
-|------|------|---------|
-| wid | string | - |
-| message | object | - |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| wid     | string | -       |
+| message | object | -       |
 
 ```javascript
 // Send a message to the worker
@@ -51,9 +72,9 @@ Workers.send(workerId, {
 
 Terminates a worker and removes it from the workers registry.
 
-| Name | Type | Default |
-|------|------|---------|
-| wid | string | - |
+| Name | Type   | Default |
+|------|--------|---------|
+| wid  | string | -       |
 
 ```javascript
 // Destroy a worker when no longer needed

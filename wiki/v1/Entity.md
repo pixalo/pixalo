@@ -6,10 +6,10 @@ The Entity class is a core component of the Pixalo game engine that represents v
 
 Registers one or more event listeners for the specified event(s). Supports multiple registration patterns including arrays and objects.
 
-| Name | Type | Default |
-|------|------|---------|
-| eventName | string \| string[] \| object | - |
-| callback | function | - |
+| Name      | Type                         | Default |
+|-----------|------------------------------|---------|
+| eventName | string \| string[] \| object | -       |
+| callback  | function                     | -       |
 
 **Usage Example:**
 ```javascript
@@ -25,10 +25,10 @@ entity.on({
 
 Registers one-time event listeners that automatically remove themselves after being triggered once.
 
-| Name | Type | Default |
-|------|------|---------|
-| eventName | string \| string[] \| object | - |
-| callback | function | - |
+| Name      | Type                         | Default |
+|-----------|------------------------------|---------|
+| eventName | string \| string[] \| object | -       |
+| callback  | function                     | -       |
 
 **Usage Example:**
 ```javascript
@@ -39,10 +39,10 @@ entity.one('animationEnd', () => console.log('Animation completed once'));
 
 Removes specific event listeners from the entity.
 
-| Name | Type | Default |
-|------|------|---------|
-| eventName | string \| string[] | - |
-| callback | function | - |
+| Name      | Type               | Default |
+|-----------|--------------------|---------|
+| eventName | string \| string[] | -       |
+| callback  | function           | -       |
 
 **Usage Example:**
 ```javascript
@@ -54,10 +54,10 @@ entity.off(['hover', 'click'], multiHandler);
 
 Triggers all registered listeners for the specified event(s) with optional arguments.
 
-| Name | Type | Default |
-|------|------|---------|
-| eventName | string \| string[] | - |
-| ...args | any | - |
+| Name      | Type               | Default |
+|-----------|--------------------|---------|
+| eventName | string \| string[] | -       |
+| ...args   | any                | -       |
 
 **Usage Example:**
 ```javascript
@@ -69,10 +69,10 @@ entity.trigger(['event1', 'event2']);
 
 Creates and appends a child entity to this entity, establishing a parent-child relationship.
 
-| Name | Type | Default |
-|------|------|---------|
-| childId | string \| Entity | - |
-| config | object | {} |
+| Name    | Type             | Default |
+|---------|------------------|---------|
+| childId | string \| Entity | -       |
+| config  | object           | {}      |
 
 **Usage Example:**
 ```javascript
@@ -87,9 +87,9 @@ const child = entity.append('child1', {
 
 Sets the z-index (layer) of the entity for rendering order control.
 
-| Name | Type | Default |
-|------|------|---------|
-| value | number \| string | - |
+| Name  | Type             | Default |
+|-------|------------------|---------|
+| value | number \| string | -       |
 
 **Usage Example:**
 ```javascript
@@ -101,9 +101,9 @@ entity.layer('above'); // 'above', 'below', 'top', 'bottom', 'reset'
 
 Finds and returns a direct child entity by its ID.
 
-| Name | Type | Default |
-|------|------|---------|
-| childId | string | - |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| childId | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -117,9 +117,9 @@ if (child) {
 
 Returns an array of child entities that have the specified CSS class.
 
-| Name | Type | Default |
-|------|------|---------|
-| className | string | - |
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| className | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -141,9 +141,9 @@ console.log(`Total entities: ${allEntities.length}`);
 
 Creates a deep copy of the entity including all its properties, children, and event listeners.
 
-| Name | Type | Default |
-|------|------|---------|
-| newId | string | null |
+| Name  | Type   | Default |
+|-------|--------|---------|
+| newId | string | null    |
 
 **Usage Example:**
 ```javascript
@@ -164,10 +164,10 @@ entity.updatePosition(); // Usually called automatically
 
 Animates entity properties smoothly over time using easing functions.
 
-| Name | Type | Default |
-|------|------|---------|
-| properties | object \| string | - |
-| options | object | { duration: 300, easing: 'linear', delay: 0 } |
+| Name       | Type             | Default                                       |
+|------------|------------------|-----------------------------------------------|
+| properties | object \| string | -                                             |
+| options    | object           | { duration: 300, easing: 'linear', delay: 0 } |
 
 **Usage Example:**
 ```javascript
@@ -182,26 +182,26 @@ entity.transition({ x: 100, opacity: 0.5 }, {
 
 Starts playing a predefined keyframe animation by name.
 
-| Name | Type | Default |
-|------|------|---------|
-| name | string | - |
+| Name | Type   | Default |
+|------|--------|---------|
+| name | string | -       |
 
 **Usage Example:**
 ```javascript
-entity.startAnimation('fadeIn');
+entity.startAnimation('blinking');
 ```
 
 ### stopAnimation(name): Entity
 
 Stops a running animation. If no name is provided, stops all animations.
 
-| Name | Type | Default |
-|------|------|---------|
+| Name | Type   | Default   |
+|------|--------|-----------|
 | name | string | undefined |
 
 **Usage Example:**
 ```javascript
-entity.stopAnimation('fadeIn');
+entity.stopAnimation('blinking');
 entity.stopAnimation(); // Stop all animations
 ```
 
@@ -209,10 +209,10 @@ entity.stopAnimation(); // Stop all animations
 
 Sets visual style properties of the entity. Accepts object or key-value parameters.
 
-| Name | Type | Default |
-|------|------|---------|
-| property | object \| string | - |
-| value | any | undefined |
+| Name     | Type             | Default   |
+|----------|------------------|-----------|
+| property | object \| string | -         |
+| value    | any              | undefined |
 
 **Usage Example:**
 ```javascript
@@ -224,8 +224,8 @@ entity.style('borderRadius', 10);
 
 Sets or gets the text content of the entity.
 
-| Name | Type | Default |
-|------|------|---------|
+| Name | Type   | Default   |
+|------|--------|-----------|
 | text | string | undefined |
 
 **Usage Example:**
@@ -238,10 +238,10 @@ const currentText = entity.text(); // Returns current text
 
 Sets an image as the background of the entity using an asset ID.
 
-| Name | Type | Default |
-|------|------|---------|
-| asset | string | - |
-| properties | object | {} |
+| Name       | Type   | Default |
+|------------|--------|---------|
+| asset      | string | -       |
+| properties | object | {}      |
 
 **Usage Example:**
 ```javascript
@@ -255,15 +255,27 @@ entity.img('heroImage', {
 
 Moves the entity to a new position with optional animation.
 
-| Name | Type | Default |
-|------|------|---------|
-| options | object \| number | - |
-| y | number | 0 |
-| duration | number | 0 |
+| Name     | Type             | Default |
+|----------|------------------|---------|
+| options  | object \| number | -       |
+| y        | number           | 0       |
+| duration | number           | 0       |
 
 **Usage Example:**
 ```javascript
-entity.move({ x: 100, y: 50, duration: 1000 });
+entity.move({
+    x: 100,
+    y: 100,
+    easing: game.Ease.easeInCubic, // Default: 'linear'
+    relative: true,
+    duration: 5000,
+    onUpdate (eased) {
+        console.log('moveAnimation updating', eased);
+    },
+    onComplete () {
+        console.log('moveAnimation complete');
+    }
+});
 entity.move(100, 50, 500); // Alternative syntax
 ```
 
@@ -289,10 +301,10 @@ entity.show();
 
 Sets or gets custom data associated with the entity.
 
-| Name | Type | Default |
-|------|------|---------|
-| key | string | - |
-| value | any | undefined |
+| Name  | Type   | Default   |
+|-------|--------|-----------|
+| key   | string | -         |
+| value | any    | undefined |
 
 **Usage Example:**
 ```javascript
@@ -309,25 +321,72 @@ Stops any currently running movement animation.
 entity.halt(); // Stops movement immediately
 ```
 
-### addClass(className): void
+### addClass(...names): Entity
 
-Adds a CSS class name to the entity's class list.
+Adds one or more class names to the entity.  
+Duplicates are automatically ignored.
 
-| Name | Type | Default |
-|------|------|---------|
-| className | string | - |
+| Name  | Type      | Description      |
+|-------|-----------|------------------|
+| names | ...string | Class(es) to add |
 
 **Usage Example:**
 ```javascript
-entity.addClass('highlighted');
+entity.addClass('enemy', 'fast', 'boss');
+```
+
+---
+
+### removeClass(...names): Entity
+
+Removes one or more class names from the entity.  
+Non-existent names are silently ignored.
+
+| Name  | Type      | Description         |
+|-------|-----------|---------------------|
+| names | ...string | Class(es) to remove |
+
+**Usage Example:**
+```javascript
+entity.removeClass('fast', 'boss');
+```
+
+---
+
+### toggleClass(name): Entity
+
+Toggles the presence of a single class name.  
+If the class exists it is removed; otherwise it is added.
+
+| Name | Type   | Description     |
+|------|--------|-----------------|
+| name | string | Class to toggle |
+
+**Usage Example:**
+```javascript
+entity.toggleClass('active');
+```
+
+### hasClass(name): boolean
+Returns `true` if the entity’s class list contains the given class name; otherwise `false`.
+
+| Name | Type   | Default |
+|------|--------|---------|
+| name | string | —       |
+
+**Usage Example:**
+```javascript
+if (entity.hasClass('enemy')) {
+    entity.addClass('invulnerable');
+}
 ```
 
 ### play(animationName): Entity
 
 Starts playing a sprite animation by name.
 
-| Name | Type | Default |
-|------|------|---------|
+| Name          | Type   | Default   |
+|---------------|--------|-----------|
 | animationName | string | undefined |
 
 **Usage Example:**
@@ -378,9 +437,9 @@ if (entity.isPlaying()) {
 
 Changes the sprite asset used for sprite animations.
 
-| Name | Type | Default |
-|------|------|---------|
-| asset | string | - |
+| Name  | Type   | Default |
+|-------|--------|---------|
+| asset | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -391,10 +450,10 @@ entity.setSpriteAsset('newSpriteSheet');
 
 Adds a new sprite animation configuration to the entity.
 
-| Name | Type | Default |
-|------|------|---------|
-| name | string | - |
-| config | object | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| name   | string | -       |
+| config | object | -       |
 
 **Usage Example:**
 ```javascript
@@ -409,9 +468,9 @@ entity.addAnimation('jump', {
 
 Replaces all sprite animations with a new animation configuration object.
 
-| Name | Type | Default |
-|------|------|---------|
-| animations | object | - |
+| Name       | Type   | Default |
+|------------|--------|---------|
+| animations | object | -       |
 
 **Usage Example:**
 ```javascript
@@ -435,9 +494,9 @@ console.log(`Playing: ${currentAnim}`);
 
 Sets the current frame of the sprite animation to a specific frame number.
 
-| Name | Type | Default |
-|------|------|---------|
-| frameNumber | number | - |
+| Name        | Type   | Default |
+|-------------|--------|---------|
+| frameNumber | number | -       |
 
 **Usage Example:**
 ```javascript
@@ -460,10 +519,10 @@ if (frameData) {
 
 Changes the frame rate of a specific sprite animation.
 
-| Name | Type | Default |
-|------|------|---------|
-| animationName | string | - |
-| newFrameRate | number | - |
+| Name          | Type   | Default |
+|---------------|--------|---------|
+| animationName | string | -       |
+| newFrameRate  | number | -       |
 
 **Usage Example:**
 ```javascript
@@ -474,9 +533,9 @@ entity.setFrameRate('walkCycle', 12); // 12 FPS
 
 Renders the entity and all its children to the provided canvas context.
 
-| Name | Type | Default |
-|------|------|---------|
-| ctx | CanvasRenderingContext2D | - |
+| Name | Type                     | Default |
+|------|--------------------------|---------|
+| ctx  | CanvasRenderingContext2D | -       |
 
 **Usage Example:**
 ```javascript
@@ -498,9 +557,6 @@ if (entity.isHoverable()) {
 ### isDraggable(): boolean
 
 Returns whether the entity can be dragged.
-
-| Name | Type | Default |
-|------|------|---------|
 
 **Usage Example:**
 ```javascript
@@ -553,9 +609,9 @@ entity.disableCollision();
 
 Sets the collision group for this entity, used for selective collision detection.
 
-| Name | Type | Default |
-|------|------|---------|
-| group | string | - |
+| Name  | Type   | Default |
+|-------|--------|---------|
+| group | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -566,9 +622,9 @@ entity.setCollisionGroup('enemies');
 
 Sets custom collision points for precise collision detection using polygonal shapes.
 
-| Name | Type | Default |
-|------|------|---------|
-| points | array | - |
+| Name   | Type  | Default |
+|--------|-------|---------|
+| points | array | -       |
 
 **Usage Example:**
 ```javascript

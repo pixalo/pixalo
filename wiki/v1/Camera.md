@@ -2,17 +2,36 @@ The Camera class is a comprehensive 2D camera system for the Pixalo game engine 
 
 ## Public Methods
 
+### Configurations
+```javascript
+const game = new Pixalo('#game', {
+    // ...
+    camera: {
+        // Default camera configuratios
+        x: 0,
+        y: 0,
+        zoom: 1,
+        bounds: null,
+        minZoom: 0.1,
+        maxZoom: 5,
+        smoothing: true,
+        smoothSpeed: 0.1,
+        rotation: 0
+    }
+});
+```
+
 ### moveTo(x, y, instant, duration, easing): Camera
 
 Moves the camera to a specific position with optional animation.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | 0 |
-| instant | boolean | false |
-| duration | number | 500 |
-| easing | string\|function | 'easeInOutCubic' |
+| Name     | Type             | Default          |
+|----------|------------------|------------------|
+| x        | number           | -                |
+| y        | number           | 0                |
+| instant  | boolean          | false            |
+| duration | number           | 500              |
+| easing   | string\|function | 'easeInOutCubic' |
 
 **Usage Example:**
 ```javascript
@@ -27,13 +46,13 @@ game.camera.moveTo(300, 400, false, 1000, 'easeInOutQuad');
 
 Moves the camera by a relative offset from its current position.
 
-| Name | Type | Default |
-|------|------|---------|
-| dx | number | - |
-| dy | number | 0 |
-| instant | boolean | false |
-| duration | number | 500 |
-| easing | string\|function | 'easeInOutCubic' |
+| Name     | Type             | Default          |
+|----------|------------------|------------------|
+| dx       | number           | -                |
+| dy       | number           | 0                |
+| instant  | boolean          | false            |
+| duration | number           | 500              |
+| easing   | string\|function | 'easeInOutCubic' |
 
 **Usage Example:**
 ```javascript
@@ -58,13 +77,13 @@ console.log(`Camera center: ${center.x}, ${center.y}`);
 
 Zooms the camera to a specific level while maintaining focus on a center point.
 
-| Name | Type | Default |
-|------|------|---------|
-| zoom | number\|object | - |
-| centerX | number | undefined |
-| centerY | number | undefined |
-| duration | number | 500 |
-| easing | string\|function | 'easeInOutCubic' |
+| Name     | Type             | Default          |
+|----------|------------------|------------------|
+| zoom     | number\|object   | -                |
+| centerX  | number           | null             |
+| centerY  | number           | null             |
+| duration | number           | 500              |
+| easing   | string\|function | 'easeInOutCubic' |
 
 **Usage Example:**
 ```javascript
@@ -88,13 +107,13 @@ game.camera.zoomTo({
 
 Alias for zoomTo method. Zooms the camera to a specific level.
 
-| Name | Type | Default |
-|------|------|---------|
-| zoom | number | - |
-| centerX | number | undefined |
-| centerY | number | undefined |
-| duration | number | 500 |
-| easing | string\|function | 'easeInOutCubic' |
+| Name     | Type             | Default          |
+|----------|------------------|------------------|
+| zoom     | number           | -                |
+| centerX  | number           | null             |
+| centerY  | number           | null             |
+| duration | number           | 500              |
+| easing   | string\|function | 'easeInOutCubic' |
 
 **Usage Example:**
 ```javascript
@@ -105,13 +124,13 @@ game.camera.zoomToLevel(2.5, 300, 200);
 
 Zooms the camera by a multiplication factor relative to current zoom level.
 
-| Name | Type | Default |
-|------|------|---------|
-| factor | number | - |
-| centerX | number | undefined |
-| centerY | number | undefined |
-| duration | number | 500 |
-| easing | string\|function | 'easeInOutCubic' |
+| Name     | Type             | Default          |
+|----------|------------------|------------------|
+| factor   | number           | -                |
+| centerX  | number           | null             |
+| centerY  | number           | null             |
+| duration | number           | 500              |
+| easing   | string\|function | 'easeInOutCubic' |
 
 **Usage Example:**
 ```javascript
@@ -126,13 +145,13 @@ game.camera.zoomBy(0.5, 400, 300);
 
 Zooms the camera at a specific screen coordinate point.
 
-| Name | Type | Default |
-|------|------|---------|
-| factor | number | - |
-| screenX | number | - |
-| screenY | number | - |
-| duration | number | 500 |
-| easing | string\|function | 'easeInOutCubic' |
+| Name     | Type             | Default          |
+|----------|------------------|------------------|
+| factor   | number           | -                |
+| screenX  | number           | -                |
+| screenY  | number           | -                |
+| duration | number           | 500              |
+| easing   | string\|function | 'easeInOutCubic' |
 
 **Usage Example:**
 ```javascript
@@ -144,12 +163,12 @@ game.camera.zoomAtPoint(2, mouseX, mouseY);
 
 Rotates the camera to a specific angle in degrees.
 
-| Name | Type | Default |
-|------|------|---------|
-| angle | number | - |
-| instant | boolean | false |
-| duration | number | 500 |
-| easing | string\|function | 'easeInOutCubic' |
+| Name     | Type             | Default          |
+|----------|------------------|------------------|
+| angle    | number           | -                |
+| instant  | boolean          | false            |
+| duration | number           | 500              |
+| easing   | string\|function | 'easeInOutCubic' |
 
 **Usage Example:**
 ```javascript
@@ -164,12 +183,12 @@ game.camera.rotate(90, false, 1000);
 
 Rotates the camera by a relative angle from its current rotation.
 
-| Name | Type | Default |
-|------|------|---------|
-| deltaAngle | number | - |
-| instant | boolean | false |
-| duration | number | 500 |
-| easing | string\|function | 'easeInOutCubic' |
+| Name       | Type             | Default          |
+|------------|------------------|------------------|
+| deltaAngle | number           | -                |
+| instant    | boolean          | false            |
+| duration   | number           | 500              |
+| easing     | string\|function | 'easeInOutCubic' |
 
 **Usage Example:**
 ```javascript
@@ -184,9 +203,9 @@ game.camera.rotateBy(-45, false, 800);
 
 Sets movement boundaries for the camera to constrain its position.
 
-| Name | Type | Default |
-|------|------|---------|
-| bounds | object\|null | - |
+| Name   | Type         | Default |
+|--------|--------------|---------|
+| bounds | object\|null | -       |
 
 **Usage Example:**
 ```javascript
@@ -206,10 +225,10 @@ game.camera.setBounds(null);
 
 Focuses the camera on a specific world coordinate with optional zoom level.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | - |
+| Name | Type   | Default      |
+|------|--------|--------------|
+| x    | number | -            |
+| y    | number | -            |
 | zoom | number | current zoom |
 
 **Usage Example:**
@@ -225,10 +244,10 @@ game.camera.focusOn(500, 300, 2);
 
 Focuses the camera to fit a rectangular area within the viewport.
 
-| Name | Type | Default |
-|------|------|---------|
-| rect | object | - |
-| padding | number | 0 |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| rect    | object | -       |
+| padding | number | 0       |
 
 **Usage Example:**
 ```javascript
@@ -244,35 +263,16 @@ game.camera.focusOnRect({
 game.camera.focusOnRect(rect, 50);
 ```
 
-### apply(ctx): void
+### apply(): void
 
 Applies the camera transformation to the rendering context.
-
-| Name | Type | Default |
-|------|------|---------|
-| ctx | CanvasRenderingContext2D | - |
 
 **Usage Example:**
 ```javascript
 // Apply camera transformation before rendering
-game.camera.apply(ctx);
+game.camera.apply();
 // ... render game objects ...
-game.camera.restore(ctx);
-```
-
-### restore(ctx): void
-
-Restores the rendering context after camera transformation.
-
-| Name | Type | Default |
-|------|------|---------|
-| ctx | CanvasRenderingContext2D | - |
-
-**Usage Example:**
-```javascript
-game.camera.apply(ctx);
-// ... render game objects ...
-game.camera.restore(ctx);
+game.ctx.restore();
 ```
 
 ### update(): void
@@ -291,10 +291,10 @@ game.camera.update();
 
 Converts screen coordinates to world coordinates considering camera transformation.
 
-| Name | Type | Default |
-|------|------|---------|
-| screenX | number | - |
-| screenY | number | - |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| screenX | number | -       |
+| screenY | number | -       |
 
 **Usage Example:**
 ```javascript
@@ -306,10 +306,10 @@ console.log(`World position: ${worldPos.x}, ${worldPos.y}`);
 
 Converts world coordinates to screen coordinates considering camera transformation.
 
-| Name | Type | Default |
-|------|------|---------|
-| worldX | number | - |
-| worldY | number | - |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| worldX | number | -       |
+| worldY | number | -       |
 
 **Usage Example:**
 ```javascript
@@ -321,10 +321,22 @@ console.log(`Screen position: ${screenPos.x}, ${screenPos.y}`);
 
 Makes the camera follow a specific entity with configurable behavior.
 
-| Name | Type | Default |
-|------|------|---------|
-| entity | object | - |
-| config | object | {} |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | object | -       |
+| config | object | {}      |
+
+#### Follow Behaviors
+The camera's follow system supports several behavior modes:
+
+- `'center'` - Keep the entity centered in the viewport
+- `'edge'` - Follow only when entity approaches viewport edges
+- `'horizontal-edge'` - Follow only on horizontal edges
+- `'vertical-edge'` - Follow only on vertical edges
+- `'top'` - Keep entity at top of viewport
+- `'bottom'` - Keep entity at bottom of viewport
+- `'left'` - Keep entity at left of viewport
+- `'right'` - Keep entity at right of viewport
 
 **Usage Example:**
 ```javascript
@@ -354,9 +366,9 @@ game.camera.cancelFollow();
 
 Saves the current camera state with a given name for later restoration.
 
-| Name | Type | Default |
-|------|------|---------|
-| name | string | - |
+| Name | Type   | Default |
+|------|--------|---------|
+| name | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -368,10 +380,10 @@ game.camera.saveState('beforeCutscene');
 
 Loads a previously saved camera state.
 
-| Name | Type | Default |
-|------|------|---------|
-| name | string | - |
-| options | object | {} |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| name    | string | -       |
+| options | object | {}      |
 
 **Usage Example:**
 ```javascript
@@ -389,9 +401,9 @@ game.camera.loadState('beforeCutscene', {
 
 Deletes a saved camera state.
 
-| Name | Type | Default |
-|------|------|---------|
-| name | string | - |
+| Name | Type   | Default |
+|------|--------|---------|
+| name | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -413,9 +425,9 @@ console.log('Saved states:', states);
 
 Checks if a state with the given name exists.
 
-| Name | Type | Default |
-|------|------|---------|
-| name | string | - |
+| Name | Type   | Default |
+|------|--------|---------|
+| name | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -428,9 +440,13 @@ if (game.camera.hasState('checkpoint1')) {
 
 Applies a screen shake effect to the camera.
 
-| Name | Type | Default |
-|------|------|---------|
-| options | object\|number | {} |
+| Name    | Type           | Default |
+|---------|----------------|---------|
+| options | object\|number | {}      |
+
+#### Shake Falloff Types
+- `'linear'` - Linear intensity decrease
+- `'exponential'` - Exponential intensity decrease for more natural effect
 
 **Usage Example:**
 ```javascript
@@ -450,9 +466,9 @@ game.camera.shake({
 
 Applies cinematic black bars effect to create widescreen appearance.
 
-| Name | Type | Default |
-|------|------|---------|
-| options | object | {} |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| options | object | {}      |
 
 **Usage Example:**
 ```javascript
@@ -467,9 +483,9 @@ game.camera.setCinematicMode({
 
 Applies a fade in/out effect to the camera.
 
-| Name | Type | Default |
-|------|------|---------|
-| options | object | {} |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| options | object | {}      |
 
 **Usage Example:**
 ```javascript
@@ -492,11 +508,11 @@ game.camera.fade({
 
 Creates a dramatic focus effect by zooming and moving to a target point.
 
-| Name | Type | Default |
-|------|------|---------|
-| target | object | - |
-| duration | number | 1000 |
-| finalZoom | number | 2 |
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| target    | object | -       |
+| duration  | number | 1000    |
+| finalZoom | number | 2       |
 
 **Usage Example:**
 ```javascript
@@ -507,31 +523,26 @@ game.camera.dramaticFocus({
 }, 1500, 3);
 ```
 
-## Configuration Options
+### reset(): Camera
 
-### Follow Behaviors
-The camera's follow system supports several behavior modes:
+Reset all configurations to the initial configuration:
 
-- `'center'` - Keep the entity centered in the viewport
-- `'edge'` - Follow only when entity approaches viewport edges
-- `'horizontal-edge'` - Follow only on horizontal edges
-- `'vertical-edge'` - Follow only on vertical edges
-- `'top'` - Keep entity at top of viewport
-- `'bottom'` - Keep entity at bottom of viewport
-- `'left'` - Keep entity at left of viewport
-- `'right'` - Keep entity at right of viewport
+- Position
+- Zoom
+- Rotation
+- Cancel follow
+- Clear all states
+- Clear all effects
+
+**Usage Example:**
+```javascript
+game.camera.reset();
+```
 
 ### Easing Functions
 Available easing functions for smooth animations:
 - `'easeInOutCubic'` (default)
-- `'easeInOutQuad'`
-- `'easeOutBounce'`
-- `'easeInOutQuart'`
-- And other easing functions provided by the Pixalo.Ease
-
-### Shake Falloff Types
-- `'linear'` - Linear intensity decrease
-- `'exponential'` - Exponential intensity decrease for more natural effect
+- And other easing functions provided by the [Pixalo.Ease](https://github.com/pixalo/pixalo/wiki/Ease)
 
 ## Important Notes
 

@@ -36,13 +36,12 @@ class Physics {
             positionIterations: config.positionIterations || 3,
             ...config
         };
+        this.config = {...this.originalConfig};
 
         this.world = new Box2D.Dynamics.b2World(
             new Box2D.Common.Math.b2Vec2(gravity.x / this.SCALE, gravity.y / this.SCALE),
             this.originalConfig.sleep
         );
-
-        this.config = this.originalConfig;
 
         this.bodies = new Map();
         this.velocities = new Map();
@@ -263,111 +262,136 @@ class Physics {
         }
         return this;
     }
-    moveEntity (entity, position, relative = false, duration = 0, easing = 'linear') {
-        if (!this.engine.isEntity(entity))
+    moveEntity (options, y = 0, duration = 0, easing = 'linear') {
+        /* ---------- argument overloading ---------- */
+        if (typeof options === 'number')
+            options = {x: options, y, duration: duration || 0, easing};
+
+        const config = {
+            x: 0,
+            y: 0,
+            duration: 0,
+            easing: 'linear',
+            relative: false,
+            onUpdate: null,
+            onComplete: null,
+            ...options
+        };
+
+        const entity = config.entity;
+        if (!entity || !this.engine.isEntity(entity))
             throw new Error('Entity is required');
 
-        const entityId = entity.id;
-        const body = this.bodies.get(entityId);
+        const body = this.bodies.get(entity.id);
         if (!body) return false;
 
         try {
+            /* ---------- helpers to swap body type ---------- */
+            const makeKinematic = () => {
+                if (body.GetType() === Box2D.Dynamics.b2Body.b2_staticBody) {
+                    body.SetType(Box2D.Dynamics.b2Body.b2_kinematicBody);
+                    return true;
+                }
+                return false;
+            };
+            const restoreType = (wasStatic) => {
+                if (wasStatic) body.SetType(Box2D.Dynamics.b2Body.b2_staticBody);
+                body.SetAwake(true);
+            };
+
+            /* ---------- starting position (world pixels) ---------- */
             const currentPos = body.GetPosition();
             const startPos = {
                 x: currentPos.x * this.SCALE,
                 y: currentPos.y * this.SCALE
             };
 
-            if (relative) {
-                position = {
-                    x: startPos.x + (position.x || 0),
-                    y: startPos.y + (position.y || 0)
-                };
+            /* ---------- target position (pixels) ---------- */
+            let target = {x: config.x, y: config.y};
+            if (config.relative) {
+                target.x += startPos.x;
+                target.y += startPos.y;
             }
 
-            if (!duration) {
-                const newPosition = new Box2D.Common.Math.b2Vec2(
-                    position.x / this.SCALE,
-                    position.y / this.SCALE
+            /* ---------- instantaneous move ---------- */
+            if (!config.duration) {
+                const newPos = new Box2D.Common.Math.b2Vec2(
+                    target.x / this.SCALE,
+                    target.y / this.SCALE
                 );
-
-                const wasStatic = body.GetType() === Box2D.Dynamics.b2Body.b2_staticBody;
-                if (wasStatic) {
-                    body.SetType(Box2D.Dynamics.b2Body.b2_kinematicBody);
-                }
-
-                body.SetPosition(newPosition);
-
-                if (wasStatic) {
-                    body.SetType(Box2D.Dynamics.b2Body.b2_staticBody);
-                }
-
-                body.SetAwake(true);
+                const wasStatic = makeKinematic();
+                body.SetPosition(newPos);
+                restoreType(wasStatic);
+                config.onComplete?.(entity);
                 return true;
             }
 
-            const startTime = performance.now();
-            const easingFunction = typeof easing === 'function' ? easing : (
-                this.engine.Ease?.[easing] || this.engine.Ease['linear']
-            );
+            /* ---------- animated move ---------- */
+            let startTime = performance.now();
+            let pausedAt = 0;
+            let totalPause = 0;
 
-            const deltaX = position.x - startPos.x;
-            const deltaY = position.y - startPos.y;
+            const deltaX = target.x - startPos.x;
+            const deltaY = target.y - startPos.y;
 
-            const animate = currentTime => {
-                let elapsed = currentTime - startTime;
+            const easingFunction =
+                typeof config.easing === 'function'
+                    ? config.easing
+                    : (this.engine.Ease?.[config.easing] || this.engine.Ease.linear);
 
-                if (elapsed >= duration) {
-                    const finalPosition = new Box2D.Common.Math.b2Vec2(
-                        position.x / this.SCALE,
-                        position.y / this.SCALE
-                    );
-
-                    const wasStatic = body.GetType() === Box2D.Dynamics.b2Body.b2_staticBody;
-                    if (wasStatic) {
-                        body.SetType(Box2D.Dynamics.b2Body.b2_kinematicBody);
-                    }
-
-                    body.SetPosition(finalPosition);
-
-                    if (wasStatic) {
-                        body.SetType(Box2D.Dynamics.b2Body.b2_staticBody);
-                    }
-
-                    body.SetAwake(true);
+            const animate = (now) => {
+                /* ---- engine paused -> record pause start ---- */
+                if (!this.engine.running) {
+                    if (pausedAt === 0) pausedAt = now;
+                    requestAnimationFrame(animate);
                     return;
                 }
 
-                const progress = elapsed / duration;
+                /* ---- just resumed -> update total paused time ---- */
+                if (pausedAt !== 0) {
+                    totalPause += now - pausedAt;
+                    pausedAt = 0;
+                }
+
+                const adjustedNow = now - totalPause;
+                const elapsed = adjustedNow - startTime;
+
+                /* ---- final frame ---- */
+                if (elapsed >= config.duration) {
+                    const finalPos = new Box2D.Common.Math.b2Vec2(
+                        target.x / this.SCALE,
+                        target.y / this.SCALE
+                    );
+                    const wasStatic = makeKinematic();
+                    body.SetPosition(finalPos);
+                    restoreType(wasStatic);
+                    config.onComplete?.(entity);
+                    return;
+                }
+
+                /* ---- interpolate ---- */
+                const progress = elapsed / config.duration;
                 const eased = easingFunction(progress);
 
-                const newPosition = new Box2D.Common.Math.b2Vec2(
+                const newPos = new Box2D.Common.Math.b2Vec2(
                     (startPos.x + deltaX * eased) / this.SCALE,
                     (startPos.y + deltaY * eased) / this.SCALE
                 );
 
-                const wasStatic = body.GetType() === Box2D.Dynamics.b2Body.b2_staticBody;
-                if (wasStatic) {
-                    body.SetType(Box2D.Dynamics.b2Body.b2_kinematicBody);
-                }
+                const wasStatic = makeKinematic();
+                body.SetPosition(newPos);
+                restoreType(wasStatic);
 
-                body.SetPosition(newPosition);
+                config.onUpdate?.(entity, eased);
 
-                if (wasStatic) {
-                    body.SetType(Box2D.Dynamics.b2Body.b2_staticBody);
-                }
-
-                body.SetAwake(true);
-
-                const animationId = requestAnimationFrame(animate);
-                entity.data('moveAnimation', animationId);
+                /* ---- keep looping ---- */
+                requestAnimationFrame(animate);
             };
 
-            const animationId = requestAnimationFrame(animate);
-            entity.data('moveAnimation', animationId);
+            requestAnimationFrame(animate);
             return true;
-        } catch (error) {
-            this.engine.warn('Error moving entity:', error);
+        } catch (err) {
+            this.engine.warn('Error moving entity:', err);
             return false;
         }
     }
@@ -531,7 +555,7 @@ class Physics {
         }
         return this;
     }
-    setGravity (x, y) {
+    setGravity (x, y = 0) {
         if (x === false) {
             x = 0;
             y = 0;
