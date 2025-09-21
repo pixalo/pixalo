@@ -9,7 +9,9 @@
  */
 import {Workers} from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
 
-const Primary = Workers.register('#primary', `./game.js`, {
+const gameScript = 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@main/examples/workers/multiple/game.js';
+
+const Primary = Workers.register('#primary', gameScript, {
     onmessage: (message) =>
         console.log('Primary: From Worker', message),
     onerror: (error) =>
@@ -21,7 +23,7 @@ Workers.send(Primary, {
     background: '#268884'
 });
 
-const Secondary = Workers.register('#secondary', `./game.js`, {
+const Secondary = Workers.register('#secondary', gameScript, {
     onmessage: (message) =>
         console.log('Secondary: From Worker', message),
     onerror: (error) =>
