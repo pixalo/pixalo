@@ -9,7 +9,7 @@
  */
 import {Workers} from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
 
-const gameScript = 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@main/examples/workers/multiple/game.js';
+const gameScript = 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/examples/workers/multiple/game.js';
 
 const Primary = Workers.register('#primary', gameScript, {
     onmessage: (message) =>
