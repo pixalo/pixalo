@@ -10,8 +10,9 @@
 import {Workers} from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
 
 const canvas = document.getElementById('canvas');
+const gameScript = `https://cdn.jsdelivr.net/gh/pixalo/pixalo/examples/workers/single/game.js`;
 
-Workers.register(canvas, `https://cdn.jsdelivr.net/gh/pixalo/pixalo@main/examples/workers/single/game.js`, {
+Workers.register(canvas, gameScript, {
     onmessage: (message) =>
         console.log('From Worker', message),
     onerror: (error) =>
