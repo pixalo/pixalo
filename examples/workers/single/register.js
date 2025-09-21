@@ -11,7 +11,7 @@ import {Workers} from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pix
 
 const canvas = document.getElementById('canvas');
 
-Workers.register(canvas, `./game.js`, {
+Workers.register(canvas, `https://cdn.jsdelivr.net/gh/pixalo/pixalo@main/examples/workers/single/game.js`, {
     onmessage: (message) =>
         console.log('From Worker', message),
     onerror: (error) =>
