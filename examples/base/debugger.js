@@ -7,12 +7,14 @@
  *    - Salar Izadi
  *    - https://github.com/salarizadi
  */
-import Pixalo from 'http://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
+import Pixalo from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
 
 const game = new Pixalo('#canvas', {
     width: window.innerWidth,
     height: window.innerHeight,
-    fps: 60
+    fps: 60,
+
+    debugger: true // Default: false
 });
 game.start();
 

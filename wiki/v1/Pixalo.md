@@ -217,6 +217,25 @@ const timerId = game.timer(() => console.log('tick'), 1000);
 game.clearTimer(timerId);
 ```
 
+### `updateTimers(timestamp)`: void
+Advances every running timer by one frame and fires callbacks whose period has elapsed.
+
+> :warning: Note: *(This is already invoked automatically by the Pixalo game-loop; only call it yourself if you disable the built-in loop or run timers outside it.)*
+
+| Name      | Type   | Description                                                        |
+|-----------|--------|--------------------------------------------------------------------|
+| timestamp | Number | Current monotonic time in milliseconds (e.g. `performance.now()`). |
+
+**Usage Examples:**
+```javascript
+// Custom loop – you manage the clock
+function myLoop (now) {
+    game.updateTimers(now);
+    requestAnimationFrame(myLoop);
+}
+requestAnimationFrame(myLoop);
+```
+
 ### `delay(ms)` (async): Promise<void>
 Returns a Promise that resolves after specified milliseconds.
 
