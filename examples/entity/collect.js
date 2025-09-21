@@ -18,8 +18,8 @@ const game = new Pixalo('#canvas', {
 });
 
 await game.wait(
-    game.loadAsset('image', 'player', '../assets/character.png'),
-    game.loadAsset('image', 'coin', '../assets/coin.png')
+    game.loadAsset('image', 'player', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/character.png'),
+    game.loadAsset('image', 'coin', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/coin.png')
 );
 
 game.start();

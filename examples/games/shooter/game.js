@@ -17,7 +17,7 @@ const game = new Pixalo('#canvas', {
     collision: true,
 });
 
-await game.loadAsset('image', 'player', './assets/character.png');
+await game.loadAsset('image', 'player', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/character.png');
 
 game.start();
 
