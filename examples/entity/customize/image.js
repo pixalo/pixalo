@@ -15,7 +15,7 @@ const game = new Pixalo('#canvas', {
     height: window.innerHeight
 });
 
-await game.loadAsset('image', 'banner', '../assets/banner.png');
+await game.loadAsset('image', 'banner', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/banner.png');
 
 game.start();
 
