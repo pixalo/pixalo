@@ -25,7 +25,18 @@ class Pixalo extends Utils {
         config.worker = typeof DedicatedWorkerGlobalScope !== 'undefined';
 
         if (typeof selector === 'string') {
-            this.canvas = document.querySelector(selector);
+            let canvas = document.querySelector(selector);
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                if (selector.startsWith('#')) {
+                    canvas.id = selector.replace('#', '');
+                } else {
+                    selector = selector.replace('.', '');
+                    canvas.classList.add(selector);
+                }
+                document.body.appendChild(canvas);
+            }
+            this.canvas = canvas;
         } else if (typeof HTMLCanvasElement !== 'undefined' && selector instanceof HTMLCanvasElement) {
             this.canvas = selector;
         } else if (typeof selector === 'object') {
