@@ -7,7 +7,7 @@
  *    - Salar Izadi
  *    - https://github.com/salarizadi
  */
-import Pixalo from 'http://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
+import Pixalo from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
 
 globalThis.game = new Pixalo('#canvas', {
     width: window.innerWidth,

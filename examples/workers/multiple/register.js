@@ -7,7 +7,7 @@
  *    - Salar Izadi
  *    - https://github.com/salarizadi
  */
-import {Workers} from 'http://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
+import {Workers} from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
 
 const Primary = Workers.register('#primary', `./game.js`, {
     onmessage: (message) =>
