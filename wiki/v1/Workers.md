@@ -13,9 +13,10 @@ Registers a canvas element with a Web Worker for offscreen rendering and returns
 | options  | object                             | {}      |
 
 **Options object properties:**
-- `type`: string - Worker type ('module' or 'classic'), defaults to 'module'
-- `onmessage`: function - Custom message handler for worker messages
-- `onerror`: function - Custom error handler for worker errors
+- `fetch`: `boolean|object` – If `true`, the Worker script is fetched with default options; if an object, that object becomes the `init` parameter of `fetch`, so you can specify method, headers, credentials, signal, etc.
+- `type` : `string` - Worker type ('module' or 'classic'), defaults to 'module'
+- `onmessage`: `function` - Custom message handler for worker messages
+- `onerror`: `function` - Custom error handler for worker errors
 
 ```javascript
 const canvas = document.getElementById('myCanvas');

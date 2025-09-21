@@ -9,10 +9,14 @@
  */
 import {Workers} from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
 
-const canvas = document.getElementById('canvas');
-const gameScript = `https://cdn.jsdelivr.net/gh/pixalo/pixalo/examples/workers/single/game.js`;
+const gameScript = `https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/examples/workers/single/game.js`;
 
-Workers.register(canvas, gameScript, {
+Workers.register('#canvas', gameScript, {
+    /**
+     * For when you use a CDN
+     */
+    fetch: true,
+
     onmessage: (message) =>
         console.log('From Worker', message),
     onerror: (error) =>

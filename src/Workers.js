@@ -10,26 +10,26 @@ class Workers {
 
     static workers = new Map();
 
-    static register (selector, script, options = {}) {
-        let canvas;
-
-        if (typeof selector === 'string') {
-            canvas = document.querySelector(selector);
-        } else if (selector instanceof HTMLCanvasElement) {
-            canvas = selector;
-        } else {
-            throw new Error('Invalid selector');
-        }
-
-        canvas.tabIndex = 0;
-        canvas.style.outline = 'none';
-
+    static async register (selector, script, options = {}) {
+        let canvas = this.#handleSelector(selector);
         const wid = `worker_${Math.floor(Math.random() * 99999)}`;
         const offscreen = canvas.transferControlToOffscreen();
+        let blobUrl = null;
 
-        script = Pixalo.scriptToUrl(script);
+        if (options.fetch) {
+            try {
+                blobUrl = await this.#fetchScript(
+                    script, typeof options.fetch === 'object' ? options.fetch : {}
+                );
+            } catch (error) {
+                options.onerror?.({code: 0, text: 'Fetch worker failed', error: error});
+                throw error;
+            }
+        } else {
+            script = Pixalo.scriptToUrl(script);
+        }
 
-        const worker = new Worker(script, {type: options.type || 'module'});
+        const worker = new Worker(blobUrl || script, {type: options.type || 'module'});
         worker.postMessage({
             wid: wid, canvas: offscreen,
             window: {
@@ -40,10 +40,12 @@ class Workers {
         }, [offscreen]);
 
         worker.onmessage = event => {
+            if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
             Workers.#handleMessage(event);
             options?.onmessage?.(event);
         };
         worker.onerror   = error => {
+            if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
             Workers.#handleError(error);
             options?.onerror?.(error);
         };
@@ -70,6 +72,42 @@ class Workers {
             workerData.worker.terminate();
             this.workers.delete(wid);
         }
+    }
+
+    static #handleSelector (selector) {
+        let canvas;
+
+        if (typeof selector === 'string') {
+            canvas = document.querySelector(selector);
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+
+                if (selector.startsWith('#')) {
+                    canvas.id = selector.replace('#', '');
+                } else {
+                    selector = selector.replace('.', '');
+                    canvas.classList.add(selector);
+                }
+
+                document.body.appendChild(canvas);
+            }
+        } else if (selector instanceof HTMLCanvasElement) {
+            canvas = selector;
+        } else {
+            throw new Error('Invalid selector');
+        }
+
+        canvas.tabIndex = 0;
+        canvas.style.outline = 'none';
+
+        return canvas;
+    }
+
+    static async #fetchScript (scriptURL, options = {}) {
+        const res = await fetch(scriptURL, options);
+        if (!res.ok) throw new Error(`fetch failed ${res.status}`);
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
     }
 
     static #handleMessage (event) {
