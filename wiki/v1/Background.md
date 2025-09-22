@@ -6,31 +6,34 @@ The Background class provides a comprehensive system for managing layered backgr
 
 Adds a new background layer to the scene. Returns the layer ID on success or null if the asset is not found.
 
-| name | type | default |
-|------|------|---------|
-| source | string | - |
-| config | object | {} |
+| name   | type   | default |
+|--------|--------|---------|
+| source | string | -       |
+| config | object | {}      |
 
 **Config Object Properties:**
-| name | type | default |
-|------|------|---------|
-| id | string | auto-generated |
-| x | number | 0 |
-| y | number | 0 |
-| scale | number | 1 |
-| rotation | number | 0 |
-| opacity | number | 1 |
-| parallax | number | 1 |
-| parallaxX | number | parallax value |
-| parallaxY | number | parallax value |
-| repeat | string | 'none' |
-| speed.x | number | 0 |
-| speed.y | number | 0 |
-| offset.x | number | 0 |
-| offset.y | number | 0 |
-| top | boolean | false |
-| zIndex | number | 0 |
-| visible | boolean | true |
+
+| name      | type    | default        |
+|-----------|---------|----------------|
+| id        | string  | auto-generated |
+| width     | number  | null           |
+| height    | number  | null           |
+| x         | number  | 0              |
+| y         | number  | 0              |
+| scale     | number  | 1              |
+| rotation  | number  | 0              |
+| opacity   | number  | 1              |
+| parallax  | number  | 1              |
+| parallaxX | number  | parallax value |
+| parallaxY | number  | parallax value |
+| repeat    | string  | 'none'         |
+| speed.x   | number  | 0              |
+| speed.y   | number  | 0              |
+| offset.x  | number  | 0              |
+| offset.y  | number  | 0              |
+| top       | boolean | false          |
+| zIndex    | number  | 0              |
+| visible   | boolean | true           |
 
 **Usage Example:**
 ```javascript
@@ -53,9 +56,9 @@ const imageLayerId = game.background.add('mountains', {
 
 Retrieves a background layer by its ID. Returns the layer object or null if not found.
 
-| name | type | default |
-|------|------|---------|
-| layerId | string | - |
+| name    | type   | default |
+|---------|--------|---------|
+| layerId | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -69,9 +72,9 @@ if (layer) {
 
 Removes a background layer from the scene. Returns true if the layer was removed, false if not found.
 
-| name | type | default |
-|------|------|---------|
-| layerId | string | - |
+| name    | type   | default |
+|---------|--------|---------|
+| layerId | string | -       |
 
 **Usage Example:**
 ```javascript
@@ -94,10 +97,10 @@ game.background.clear();
 
 Changes the z-index (rendering order) of a background layer. Returns true if successful, false if layer not found.
 
-| name | type | default |
-|------|------|---------|
-| layerId | string | - |
-| zIndex | number | - |
+| name    | type   | default |
+|---------|--------|---------|
+| layerId | string | -       |
+| zIndex  | number | -       |
 
 **Usage Example:**
 ```javascript
@@ -108,10 +111,10 @@ game.background.setOrder('bg_layer_1', 10);
 
 Sets the visibility of a background layer. Returns true if successful, false if layer not found.
 
-| name | type | default |
-|------|------|---------|
-| layerId | string | - |
-| visible | boolean | - |
+| name    | type    | default |
+|---------|---------|---------|
+| layerId | string  | -       |
+| visible | boolean | -       |
 
 **Usage Example:**
 ```javascript
@@ -126,10 +129,10 @@ game.background.setVisible('bg_layer_1', true);
 
 Updates properties of an existing background layer. Returns true if successful, false if layer not found.
 
-| name | type | default |
-|------|------|---------|
-| layerId | string | - |
-| config | object | - |
+| name    | type   | default |
+|---------|--------|---------|
+| layerId | string | -       |
+| config  | object | -       |
 
 **Usage Example:**
 ```javascript

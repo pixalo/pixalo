@@ -749,7 +749,7 @@ class Entity {
 
         // trigger events callbacks
         this.trigger('animationStart', animationName);
-        animation.onStart?.call(this);
+        animation.onStart?.call(this, animationName);
 
         if (oldAnimation !== animationName) {
             this.trigger('animationChange', oldAnimation, animationName);
@@ -777,11 +777,12 @@ class Entity {
                 if (this.sprite.currentFrame >= animation.frames.length) {
                     if (animation.loop) {
                         this.sprite.currentFrame = 0;
-                        animation.onLoop?.call(this);
+                        this.trigger('animationOnLoop', this.sprite.currentAnimation);
+                        animation.onLoop?.call(this, this.sprite.currentAnimation);
                     } else {
                         this.stop();
                         this.trigger('animationEnd', animationName);
-                        animation.onEnd?.call(this);
+                        animation.onEnd?.call(this, animationName);
                         return;
                     }
                 }
