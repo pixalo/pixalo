@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/assets/banner.png" alt="Pixalo Banner" width="400" style="border-radius: 8px">
+</p>
+
 # Pixalo Game Engine 🎮
 
 A powerful and flexible 2D game engine built with JavaScript, designed for creating interactive web games and applications.

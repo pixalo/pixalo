@@ -25,6 +25,10 @@ class Background {
             sourceType: sourceType,
             asset: sourceType === 'asset' ? this.engine.getAsset(source) : null,
 
+            // Size
+            width:  config.width  || null,
+            height: config.height || null,
+
             // Position and transform
             x: config.x || 0,
             y: config.y || 0,
@@ -33,7 +37,7 @@ class Background {
             opacity: config.opacity !== undefined ? config.opacity : 1,
 
             // Parallax settings
-            parallax: config.parallax !== undefined ? config.parallax : 1,
+            parallax : config.parallax !== undefined ? config.parallax : 1,
             parallaxX: config.parallaxX !== undefined ? config.parallaxX : config.parallax || 1,
             parallaxY: config.parallaxY !== undefined ? config.parallaxY : config.parallax || 1,
 
@@ -188,23 +192,22 @@ class Background {
         }
     }
     _renderSingleImage (ctx, layer, asset, layerWorldX, layerWorldY) {
-        const imgWidth = asset.width * layer.scale;
-        const imgHeight = asset.height * layer.scale;
+        const imgWidth  = layer.width  != null ? layer.width  : asset.width  * layer.scale;
+        const imgHeight = layer.height != null ? layer.height : asset.height * layer.scale;
 
         if (layer.rotation !== 0) {
             ctx.save();
             ctx.translate(layerWorldX + imgWidth / 2, layerWorldY + imgHeight / 2);
             ctx.rotate(layer.rotation);
-            ctx.scale(layer.scale, layer.scale);
-            ctx.drawImage(asset, -asset.width / 2, -asset.height / 2);
+            ctx.drawImage(asset, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
             ctx.restore();
         } else {
             ctx.drawImage(asset, layerWorldX, layerWorldY, imgWidth, imgHeight);
         }
     }
     _renderRepeatingBackground (ctx, layer, asset, layerWorldX, layerWorldY, cameraX, cameraY, viewportWidth, viewportHeight) {
-        const imgWidth = asset.width * layer.scale;
-        const imgHeight = asset.height * layer.scale;
+        const imgWidth  = layer.width  != null ? layer.width  : asset.width  * layer.scale;
+        const imgHeight = layer.height != null ? layer.height : asset.height * layer.scale;
 
         // Calculate tile range similar to TileMap rendering
         let startTileX = 0, endTileX = 1, startTileY = 0, endTileY = 1;
@@ -213,14 +216,13 @@ class Background {
             // Calculate which tiles are visible horizontally
             const relativeStartX = cameraX - layerWorldX;
             startTileX = Math.floor(relativeStartX / imgWidth) - 1;
-            endTileX = Math.ceil((relativeStartX + viewportWidth) / imgWidth) + 1;
+            endTileX   = Math.ceil((relativeStartX + viewportWidth)  / imgWidth) + 1;
         }
-
         if (layer.repeat === 'y' || layer.repeat === 'both') {
-            // Calculate which tiles are visible vertically  
+            // Calculate which tiles are visible vertically
             const relativeStartY = cameraY - layerWorldY;
             startTileY = Math.floor(relativeStartY / imgHeight) - 1;
-            endTileY = Math.ceil((relativeStartY + viewportHeight) / imgHeight) + 1;
+            endTileY   = Math.ceil((relativeStartY + viewportHeight) / imgHeight) + 1;
         }
 
         // Render only visible tiles
@@ -230,17 +232,14 @@ class Background {
                 const drawY = layerWorldY + (tileY * imgHeight);
 
                 // Skip tiles that are completely outside viewport for optimization
-                if (drawX + imgWidth < cameraX || drawX > cameraX + viewportWidth ||
-                    drawY + imgHeight < cameraY || drawY > cameraY + viewportHeight) {
-                    continue;
-                }
+                if (drawX + imgWidth  < cameraX || drawX > cameraX + viewportWidth ||
+                    drawY + imgHeight < cameraY || drawY > cameraY + viewportHeight) continue;
 
                 if (layer.rotation !== 0) {
                     ctx.save();
                     ctx.translate(drawX + imgWidth / 2, drawY + imgHeight / 2);
                     ctx.rotate(layer.rotation);
-                    ctx.scale(layer.scale, layer.scale);
-                    ctx.drawImage(asset, -asset.width / 2, -asset.height / 2);
+                    ctx.drawImage(asset, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
                     ctx.restore();
                 } else {
                     ctx.drawImage(asset, drawX, drawY, imgWidth, imgHeight);
