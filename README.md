@@ -1,6 +1,8 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/assets/banner.png" alt="Pixalo Banner" width="400" style="border-radius: 8px">
-</p>
+<a href="https://pixalo.xyz" target="_blank">
+    <p align="center">
+      <img src="https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/assets/banner.png" alt="Pixalo Banner" width="400" style="border-radius: 8px">
+    </p>
+</a>
 
 # Pixalo Game Engine 🎮
 
@@ -23,7 +25,7 @@ A powerful and flexible 2D game engine built with JavaScript, designed for creat
 
 ## 📚 Documentation
 
-For detailed documentation and examples, please visit our [wiki](https://github.com/pixalo/pixalo/wiki).
+For detailed documentation and examples, please visit our [wiki](https://github.com/pixalo/pixalo/tree/main/wiki).
 
 ## 📜 License
 
@@ -32,3 +34,9 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 ## 🌟 Support
 
 If you like this project, please give it a star ⭐️
+
+## 🤝 Contributors
+
+<a href="https://github.com/pixalo/pixalo/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=pixalo/pixalo" />
+</a>

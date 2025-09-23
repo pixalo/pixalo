@@ -33,8 +33,8 @@ await game.loadAsset('spritesheet', 'kennyCards', 'https://raw.githubusercontent
 game.append('rpg_character', {
     width: 100,
     height: 150,
-    x: (game.baseWidth / 2) - (128 / 2),
-    y: (game.baseHeight / 2) - (128 / 2),
+    x: (game.baseWidth  - 100) / 2,
+    y: (game.baseHeight - 150) / 2,
     draggable: true,
 
     /**

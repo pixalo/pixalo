@@ -32,8 +32,8 @@ await game.loadAsset('spritesheet', 'punk_pixel', 'https://raw.githubusercontent
 const punk = game.append('punk', {
     width: 150,
     height: 80,
-    x: (game.baseWidth / 2) - (128 / 2),
-    y: (game.baseHeight / 2) - (128 / 2),
+    x: (game.baseWidth  - 150) / 2,
+    y: (game.baseHeight - 80) / 2,
     draggable: true,
 
     /**

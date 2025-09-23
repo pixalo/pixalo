@@ -1,4 +1,4 @@
-The Camera class is a comprehensive 2D camera system for the Pixalo game engine that provides advanced viewport management, smooth animations, and cinematic effects. It handles camera movement, zooming, rotation, entity following, bounds management, and various visual effects like screen shake, fade transitions, and cinematic modes.
+The Camera class is a comprehensive 2D camera system for the Pixalo game engine that provides advanced viewport management, smooth animations, and cinematic effects. It handles camera movement, zooming, rotation, entity following, bounds management, and screen-shake effects.
 
 ## Public Methods
 
@@ -459,48 +459,6 @@ game.camera.shake({
     duration: 800,
     frequency: 60,
     falloff: 'exponential'
-});
-```
-
-### setCinematicMode(options): Camera
-
-Applies cinematic black bars effect to create widescreen appearance.
-
-| Name    | Type   | Default |
-|---------|--------|---------|
-| options | object | {}      |
-
-**Usage Example:**
-```javascript
-// Apply cinematic mode
-game.camera.setCinematicMode({
-    duration: 1500,
-    ratio: 2.35
-});
-```
-
-### fade(options): Camera
-
-Applies a fade in/out effect to the camera.
-
-| Name    | Type   | Default |
-|---------|--------|---------|
-| options | object | {}      |
-
-**Usage Example:**
-```javascript
-// Fade to black
-game.camera.fade({
-    type: 'out',
-    color: 'black',
-    duration: 1000
-});
-
-// Fade in from white
-game.camera.fade({
-    type: 'in',
-    color: 'white',
-    duration: 800
 });
 ```
 

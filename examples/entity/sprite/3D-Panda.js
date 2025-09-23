@@ -31,8 +31,8 @@ await game.loadAsset('spritesheet', '3D_panda', 'https://raw.githubusercontent.c
 const panda = game.append('panda', {
     width: 150,
     height: 80,
-    x: (game.baseWidth / 2) - (128 / 2),
-    y: (game.baseHeight / 2) - (128 / 2),
+    x: (game.baseWidth - 150) / 2,
+    y: (game.baseHeight - 80) / 2,
     draggable: true,
 
     /**

@@ -149,6 +149,7 @@ class Utils {
                 screenX: touch.clientX,
                 screenY: touch.clientY,
                 timestamp: Date.now(),
+                touches: this._handleTouches(e),
                 identifier
             };
 
@@ -205,7 +206,8 @@ class Utils {
                 screenX: touch.clientX,
                 screenY: touch.clientY,
                 timestamp: Date.now(),
-                identifier
+                touches: this._handleTouches(e),
+                identifier,
             };
 
             this.trigger('touchmove', eventData);
@@ -253,6 +255,7 @@ class Utils {
                 screenX: touch.clientX,
                 screenY: touch.clientY,
                 timestamp: Date.now(),
+                touches: this._handleTouches(e),
                 identifier
             };
 
@@ -278,6 +281,20 @@ class Utils {
     }
     _handleTouchCancel (e) {
         this.handleTouchEnd(e);
+    }
+    _handleTouches (e) {
+        const touches = [];
+        for (const touch of e.touches) {
+            const world = this.camera.screenToWorld(touch.clientX, touch.clientY);
+            touches.push({
+                identifier: touch.identifier,
+                screenX: touch.clientX,
+                screenY: touch.clientY,
+                worldX: world.x,
+                worldY: world.y
+            });
+        }
+        return touches;
     }
     /** ======== END ======== */
 
