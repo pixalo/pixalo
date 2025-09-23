@@ -177,7 +177,7 @@ class Workers {
         // Helper function to extract serializable event data
         const extractEventData = (event, type) => {
             const rect = worker.canvas.getBoundingClientRect();
-            return {
+            const base = {
                 type,
                 clientX: event.clientX,
                 clientY: event.clientY,
@@ -199,6 +199,15 @@ class Workers {
                 shiftKey: event.shiftKey,
                 timeStamp: event.timeStamp
             };
+
+            if (type === 'wheel') {
+                base.deltaX = event.deltaX;
+                base.deltaY = event.deltaY;
+                base.deltaZ = event.deltaZ;
+                base.deltaMode = event.deltaMode;
+            }
+
+            return base;
         };
         const extractKeyEventData = (event, type) => ({
             type,
@@ -290,6 +299,15 @@ class Workers {
             this.send(wid, {
                 action: 'canvas_event',
                 event: extractEventData(event, 'mouseup')
+            });
+        });
+
+        // Wheel Event
+        worker.canvas.addEventListener('wheel', event => {
+            event.preventDefault();
+            this.send(wid, {
+                action: 'canvas_event',
+                event: extractEventData(event, 'wheel')
             });
         });
 
