@@ -48,7 +48,7 @@ game.addBackground('bottom-clouds', {
     top     : true,
     repeat  : 'x',
     parallax: 0.7,     // 70% movement (seems to be very close)
-    y       : window.innerHeight * 0.6,
+    y       : game.baseHeight - 180,
     zIndex  : 30
 });
 

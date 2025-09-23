@@ -40,7 +40,7 @@ game.addBackground('top-clouds', {
 
 game.addBackground('bottom-clouds', {
     top   : true,
-    y     : game.baseHeight * 0.6,
+    y     : game.baseHeight - 180,
     repeat: 'x',
     speed : { x: 5, y: 0 }
 });

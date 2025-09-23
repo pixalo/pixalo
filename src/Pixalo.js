@@ -237,6 +237,7 @@ class Pixalo extends Utils {
         this.canvas.addEventListener('touchmove', this._handleTouchMove.bind(this));
         this.canvas.addEventListener('touchend', this._handleTouchEnd.bind(this));
         this.canvas.addEventListener('touchcancel', this._handleTouchCancel.bind(this));
+        this.canvas.addEventListener('wheel', this._handleWheel.bind(this), { passive: false });
 
         this.canvas.addEventListener('keydown', this._handleKeyDown.bind(this));
         this.canvas.addEventListener('keyup', this._handleKeyUp.bind(this));
@@ -279,6 +280,9 @@ class Pixalo extends Utils {
                     break;
                 case 'touchcancel':
                     this._handleTouchCancel(data.event);
+                    break;
+                case 'wheel':
+                    this._handleWheel(data.event);
                     break;
             }
             return;

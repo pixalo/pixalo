@@ -410,6 +410,27 @@ class Utils {
             }
         }
     }
+    _handleWheel (e) {
+        if (!this.running) return;
+        e?.preventDefault?.();
+
+        const worldCoords = this.camera.screenToWorld(e.clientX, e.clientY);
+        const eventData = {
+            x: worldCoords.x,
+            y: worldCoords.y,
+            worldX: worldCoords.x,
+            worldY: worldCoords.y,
+            screenX: e.clientX,
+            screenY: e.clientY,
+            deltaX: e.deltaX,
+            deltaY: e.deltaY,
+            deltaZ: e.deltaZ,
+            deltaMode: e.deltaMode,
+            timestamp: Date.now()
+        };
+
+        this.trigger('wheel', eventData);
+    }
     /** ======== END ======== */
 
     /** ======== CLICK ======== */
