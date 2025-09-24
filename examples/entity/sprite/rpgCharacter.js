@@ -32,8 +32,8 @@ await game.loadAsset('spritesheet', 'rpg_character', 'https://raw.githubusercont
 game.append('rpg_character', {
     width: 60,
     height: 85,
-    x: (game.baseWidth / 2) - (128 / 2),
-    y: (game.baseHeight / 2) - (128 / 2),
+    x: (game.baseWidth  - 60) / 2,
+    y: (game.baseHeight - 85) / 2,
     draggable: true,
 
     /**

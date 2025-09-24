@@ -56,10 +56,7 @@ class Camera {
         this._states = new Map();
 
         this._effects = {
-            shake: null,
-            flash: null,
-            fade: null,
-            cinematic: null
+            shake: null
         };
 
         this.rotation = this.config.rotation; // Current rotation angle
@@ -486,7 +483,8 @@ class Camera {
 
     /** ======== FOLLOW ENTITY ======== */
     follow (entity, config = {}) {
-        if (!entity) return this;
+        if (!this.engine.isEntity(entity))
+            throw new Error('Entity is required');
 
         this._followedEntity = entity;
         this._followConfig = {
@@ -799,60 +797,6 @@ class Camera {
 
         return this;
     }
-    setCinematicMode (options = {}) {
-        const {
-            duration = 1000,
-            ratio = 2.35
-        } = options;
-
-        // Calculating the height of the black bars
-        const targetHeight = (this.engine.baseHeight - (this.engine.baseWidth / ratio)) / 2;
-        const startTime = Date.now();
-
-        this._effects.cinematic = {
-            animate: (ctx) => {
-                const elapsed = Date.now() - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                const height = targetHeight * progress;
-
-                // Drawing black stripes
-                ctx.fillStyle = 'black';
-                ctx.fillRect(0, 0, this.engine.baseWidth, height);
-                ctx.fillRect(0, this.engine.baseHeight - height, this.engine.baseWidth, height);
-
-                return progress < 1;
-            }
-        };
-
-        return this;
-    }
-    fade (options = {}) {
-        const {
-            type = 'in',
-            color = 'black',
-            duration = 1000
-        } = options;
-
-        const startTime = Date.now();
-
-        this._effects.fade = {
-            animate: (ctx) => {
-                const elapsed = Date.now() - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                const alpha = type === 'in' ? 1 - progress : progress;
-
-                // Apply feed
-                ctx.fillStyle = color;
-                ctx.globalAlpha = alpha;
-                ctx.fillRect(0, 0, this.engine.baseWidth, this.engine.baseHeight);
-                ctx.globalAlpha = 1;
-
-                return progress < 1;
-            }
-        };
-
-        return this;
-    }
     dramaticFocus (target, duration = 1000, finalZoom = 2) {
         // Save initial state
         const startZoom = this.zoom;
@@ -936,10 +880,7 @@ class Camera {
 
         // Clear all effects
         this._effects = {
-            shake: null,
-            flash: null,
-            fade: null,
-            cinematic: null
+            shake: null
         };
 
         return this;
