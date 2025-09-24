@@ -100,6 +100,8 @@ class Physics {
             const entityA = contact.GetFixtureA().GetBody().GetUserData();
             const entityB = contact.GetFixtureB().GetBody().GetUserData();
 
+            if (!entityA || !entityB) return;
+
             // Receive detailed collision information
             const worldManifold = new Box2D.Collision.b2WorldManifold();
             contact.GetWorldManifold(worldManifold);
@@ -256,9 +258,14 @@ class Physics {
     removeEntity (entity) {
         const body = this.bodies.get(entity.id);
         if (body) {
-            this.world.DestroyBody(body);
-            this.bodies.delete(entity.id);
-            this.velocities.delete(entity.id);
+            Promise.resolve().then(() => {
+                body.SetActive(false);
+                body.SetUserData(null);
+
+                this.world.DestroyBody(body);
+                this.bodies.delete(entity.id);
+                this.velocities.delete(entity.id);
+            });
         }
         return this;
     }
@@ -553,6 +560,24 @@ class Physics {
                 y: Math.min(Math.max(body.GetLinearVelocity().y, -limit), limit)
             });
         }
+        return this;
+    }
+    setTransform (entity, {x, y, rotation} = {}) {
+        if (!this.bodies.has(entity.id)) return this; // safety
+        const body = this.bodies.get(entity.id);
+        const SCALE = this.SCALE;
+
+        /* ---- position ---- */
+        if (x !== undefined || y !== undefined) {
+            const newX = x !== undefined ? (x + entity.width / 2) / SCALE : body.GetPosition().x;
+            const newY = y !== undefined ? (y + entity.height / 2) / SCALE : body.GetPosition().y;
+            body.SetPosition(new Box2D.Common.Math.b2Vec2(newX, newY));
+        }
+
+        /* ---- rotation ---- */
+        if (rotation !== undefined)
+            body.SetAngle((rotation * Math.PI) / 180);
+
         return this;
     }
     setGravity (x, y = 0) {
@@ -1035,4 +1060,4 @@ class Physics {
 
 }
 
-export default Physics;
+export {Physics as default, Box2D};

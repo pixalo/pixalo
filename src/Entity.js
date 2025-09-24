@@ -65,7 +65,7 @@ class Entity {
 
             transition: config.transition || {},
 
-            visible: config.visible || true,
+            visible: config.visible ?? true,
             blendMode: config.blendMode || 'source-over',
 
             clip: config.clip,
@@ -517,34 +517,37 @@ class Entity {
 
     /** ======== Wrapper Methods ======== */
     style (property, value) {
+        /* ---------- object form ---------- */
         if (typeof property === 'object') {
-            if ('x' in property || 'y' in property) {
-                Object.assign(this, {
-                    x: property.x || this.x,
-                    y: property.y || this.y
-                });
-                this.updatePosition();
-            }
+            const {x, y, rotation, ...rest} = property;
 
-            if ('fill' in property) {
-                property.backgroundColor = property.fill;
-            }
+            /* ---- physics branch ---- */
+            if (this.engine?.physicsEnabled && (x !== undefined || y !== undefined || rotation !== undefined))
+                this.engine.physics.setTransform(this, {x, y, rotation});
 
-            Object.assign(this.styles, property);
-        } else {
-            if (property === 'x' || property === 'y') {
-                this[property] = value;
-                this.updatePosition();
-                return this;
-            }
+            /* ---- keep local fields & styles in sync ---- */
+            if (x !== undefined) this.x = x;
+            if (y !== undefined) this.y = y;
+            if (rotation !== undefined) this.styles.rotation = rotation;
+            if (Object.keys(rest).length) Object.assign(this.styles, rest);
 
-            if (property === 'fill') {
-                this.styles['backgroundColor'] = value;
-                this.styles['fill'] = value;
-            }
-
-            this.styles[property] = value;
+            if (x !== undefined || y !== undefined) this.updatePosition();
+            return this;
         }
+
+        /* ---------- single property ---------- */
+        if (property === 'x' || property === 'y' || property === 'rotation') {
+            if (this.engine?.physicsEnabled)
+                this.engine.physics.setTransform(this, {[property]: value});
+
+            this[property] = value;              // local field
+            this.styles[property] = value;       // styles mirror
+            if (property === 'x' || property === 'y') this.updatePosition();
+            return this;
+        }
+
+        /* ---- any other style ---- */
+        this.styles[property] = value;
         return this;
     }
     text (text) {
@@ -687,9 +690,11 @@ class Entity {
     }
     hide () {
         this.style('visible', false);
+        return this;
     }
     show () {
         this.style('visible', true);
+        return this;
     }
     data (key, value) {
         if (value === undefined)
