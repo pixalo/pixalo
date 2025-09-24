@@ -1,21 +1,21 @@
-// Import all classes
-import Utils from './Utils.js';
-import Pixalo from './Pixalo.js';
-import Workers from './Workers.js';
+// ----------  Import  ----------
+import Utils        from './Utils.js';
+import Pixalo       from './Pixalo.js';
+import Workers      from './Workers.js';
 import AudioManager from './AudioManager.js';
-import Background from './Background.js';
-import Bezier from './Bezier.js';
-import Camera from './Camera.js';
-import Collision from './Collision.js';
-import Ease from './Ease.js';
-import Emitters from './Emitters.js';
-import Entity from './Entity.js';
-import Grid from './Grid.js';
-import Particle from './Particle.js';
-import Physics from './Physics.js';
-import TileMap from './TileMap.js';
+import Background   from './Background.js';
+import Bezier       from './Bezier.js';
+import Camera       from './Camera.js';
+import Collision    from './Collision.js';
+import Ease         from './Ease.js';
+import Emitters     from './Emitters.js';
+import Entity       from './Entity.js';
+import Grid         from './Grid.js';
+import Particle     from './Particle.js';
+import Physics, {Box2D} from './Physics.js';
+import TileMap      from './TileMap.js';
 
-// Export all classes
+// ----------  ES-Module Export  ----------
 export {
     Pixalo as default,
     Workers,
@@ -30,11 +30,12 @@ export {
     Grid,
     Particle,
     Physics,
+    Box2D,
     TileMap,
     Utils
 };
 
-// For UMD builds, also attach to the main Pixalo object
+// ----------  UMD / AMD / CommonJS / Browser  ----------
 if (typeof window !== 'undefined') {
     const PixaloBundle = {
         Pixalo,
@@ -50,29 +51,21 @@ if (typeof window !== 'undefined') {
         Grid,
         Particle,
         Physics,
+        Box2D,
         TileMap,
         Utils
     };
 
-    // Make individual classes available
-    Object.assign(PixaloBundle, {
-        Workers,
-        AudioManager,
-        Background,
-        Bezier,
-        Camera,
-        Collision,
-        Ease,
-        Emitters,
-        Entity,
-        Grid,
-        Particle,
-        Physics,
-        TileMap,
-        Utils
-    });
-
-    if (typeof module !== 'undefined' && module.exports) {
+    // 1) AMD
+    if (typeof define === 'function' && define.amd) {
+        define(function () { return PixaloBundle; });
+    }
+    // 2) CommonJS
+    else if (typeof module === 'object' && module.exports) {
         module.exports = PixaloBundle;
+    }
+    // 3) Browser global
+    else {
+        window.PixaloBundle = PixaloBundle;
     }
 }
