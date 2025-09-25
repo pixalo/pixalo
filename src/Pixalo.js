@@ -75,6 +75,7 @@ class Pixalo extends Utils {
             collision: config.collision || {},
             background: config.background || '#ffffff',
             resizeTarget: config.resizeTarget || false,
+            autoStartStop: config.autoStartStop ?? true,
         };
         this.baseWidth = this.config.width;
         this.baseHeight = this.config.height;
@@ -222,10 +223,10 @@ class Pixalo extends Utils {
         }
 
         document.addEventListener('visibilitychange', () => {
-            // if (document.hidden)
-            //     return this.stop();
-            // this.start();
-            this.trigger('visibility', !document.hidden);
+            const isVisible = !document.hidden;
+            if (this.config.autoStartStop)
+                isVisible ? this.start() : this.stop();
+            this.trigger('visibility', isVisible);
         });
 
         this.canvas.addEventListener('click', this._handleClick.bind(this));
@@ -291,11 +292,9 @@ class Pixalo extends Utils {
 
         // Handle visibility change
         if (data?.action === 'visibilitychange') {
-            // if (data.hidden) {
-            //     this.stop();
-            // } else {
-            //     this.start();
-            // }
+            const isVisible = !data.hidden;
+            if (this.config.autoStartStop)
+                isVisible ? this.start() : this.stop();
             this.trigger('visibility', !data.hidden);
             return;
         }

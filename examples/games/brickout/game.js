@@ -13,7 +13,8 @@ const game = new Pixalo('#canvas', {
     width: window.innerWidth,
     height: window.innerHeight,
     background: '#031C1B',
-    physics: {gravity: {x: 0, y: 0}}
+    physics: {gravity: {x: 0, y: 0}},
+    autoStartStop: false
 });
 game.start();
 
