@@ -17,6 +17,14 @@ const game = new Pixalo('#canvas', {
 });
 game.start();
 
+game.on('visibility', visibility => {
+    if (visibility && !game.data('gameover') && !game.data('win')) {
+        game.start();
+    } else {
+        game.stop();
+    }
+});
+
 // walls
 ['top', 'left', 'right'].forEach(side => {
     game.append(`${side}Wall`, {
@@ -54,6 +62,7 @@ const paddle = game.append('paddle', {
     y: game.baseHeight - 80,
     width: 100, height: 15,
     fill: '#F3A71A',
+    borderRadius: 6,
     physics: {bodyType: 'kinematic'}
 });
 game.on(['mousemove', 'touchmove'], e => {
@@ -70,11 +79,13 @@ const ball = game.append('ball', {
     shape: 'circle',
     width: 20, height: 20,
     x: game.baseWidth / 2,
-    y: game.baseHeight - 120,
+    y: paddle.y - 20,
     fill: '#fff',
     physics: {density: 1, restitution: 1, friction: 0}
 });
-game.physics.setVelocity(ball, {x: 300, y: -300});
+game.one('update', () => {
+    game.physics.setVelocity(ball, {x: 300, y: -300});
+});
 
 // bottom wall + game over
 const bottomWall = game.append('bottomWall', {
@@ -84,7 +95,6 @@ const bottomWall = game.append('bottomWall', {
     visible: false,
     physics: {bodyType: 'static'}
 });
-
 bottomWall.on('collide', () => {
     game.append('gameOver', {
         width: 200,
@@ -93,6 +103,7 @@ bottomWall.on('collide', () => {
         color: '#F3A71A', font: '50px Arial',
         origin: {x: 0.5, y: 0.5}
     });
+    game.data('gameover', true);
     game.stop();
 });
 
@@ -105,5 +116,6 @@ function win () {
         color: '#F3A71A', font: '60px Arial',
         origin: {x: 0.5, y: 0.5}
     });
+    game.data('win', true);
     game.stop();
 }

@@ -48,6 +48,7 @@ class Pixalo extends Utils {
         this.eventListeners = new Map();
         this.assets = new Map();
         this.timers = new Map();
+        this._data  = new Map();
 
         this.#init(config);
     }
@@ -221,10 +222,10 @@ class Pixalo extends Utils {
         }
 
         document.addEventListener('visibilitychange', () => {
-            if (document.hidden)
-                return this.stop();
-
-            this.start();
+            // if (document.hidden)
+            //     return this.stop();
+            // this.start();
+            this.trigger('visibility', !document.hidden);
         });
 
         this.canvas.addEventListener('click', this._handleClick.bind(this));
@@ -289,12 +290,13 @@ class Pixalo extends Utils {
         }
 
         // Handle visibility change
-        if (data?.action === 'visibility_change') {
-            if (data.hidden) {
-                this.stop();
-            } else {
-                this.start();
-            }
+        if (data?.action === 'visibilitychange') {
+            // if (data.hidden) {
+            //     this.stop();
+            // } else {
+            //     this.start();
+            // }
+            this.trigger('visibility', !data.hidden);
             return;
         }
 
@@ -463,6 +465,19 @@ class Pixalo extends Utils {
     }
     async delay (ms) {
         return new Promise(resolve => this.timeout(resolve, ms));
+    }
+    /** ======== END ======== */
+
+    /** ======== DATA ======== */
+    data (key, value) {
+        if (value === undefined)
+            return this._data.get(key);
+        this._data.set(key, value);
+        return this;
+    }
+    unset (key) {
+        this._data.delete(key);
+        return this;
     }
     /** ======== END ======== */
 
