@@ -34,7 +34,12 @@ class Physics {
             maxVelocity: config.maxVelocity || 1000,
             velocityIterations: config.velocityIterations || 8,
             positionIterations: config.positionIterations || 3,
-            ...config
+            ...config,
+            drag: {
+                angularDamping: config.angularDamping ?? 1,
+                linearDamping : config.linearDamping  ?? 0.1,
+                fixedRotation : config.fixedRotation  ?? false
+            }
         };
         this.config = {...this.originalConfig};
 
@@ -890,9 +895,10 @@ class Physics {
         });
         this.bodyTouchMap.set(targetEntity.id, identifier);
 
-        body.SetAngularDamping(0.1);
-        body.SetLinearDamping(0.1);
-        body.SetFixedRotation(true);
+        const {angularDamping, linearDamping, fixedRotation} = this.config.drag;
+        body.SetAngularDamping(angularDamping);
+        body.SetLinearDamping(linearDamping);
+        body.SetFixedRotation(fixedRotation);
 
         // Stop moving
         targetEntity.halt();
@@ -933,10 +939,11 @@ class Physics {
         if (!mouseJoint || !dragBodyData) return;
 
         const {body, entity, originalType} = dragBodyData;
+        const {angularDamping, linearDamping} = this.config.drag;
 
         body.SetFixedRotation(false);
-        body.SetAngularDamping(0.1);
-        body.SetLinearDamping(0.1);
+        body.SetAngularDamping(angularDamping);
+        body.SetLinearDamping(linearDamping);
 
         // If it was originally kinematic, reset velocities before changing type
         if (originalType === Box2D.Dynamics.b2Body.b2_kinematicBody) {

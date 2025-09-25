@@ -10,62 +10,149 @@
 import Pixalo, {Box2D} from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo.esm.js';
 
 const game = new Pixalo('#canvas', {
-    width: window.innerWidth,
+    width : window.innerWidth,
     height: window.innerHeight,
     background: '#031C1B',
-    physics: { gravity: { x: 0, y: 800 } }
+    physics : { gravity: { y: 800 } }
 });
 game.start();
 
-// ground
+// 2. Static ground
 game.append('ground', {
-    x: 0, y: game.baseHeight - 40,
-    width: game.baseWidth, height: 40,
+    x: 0,  y: game.baseHeight - 40,
+    width : game.baseWidth,
+    height: 40,
     backgroundColor: '#268985',
     physics: { bodyType: 'static' }
 });
 
-// helper: create & centre body part
+// 3. Body-part dimensions (top-left anchor)
+const HEAD_D  = 44;                                // head diameter
+const TORSO_W = 35,  TORSO_H = 70;        // torso
+const ARM_W   = 45,  ARM_H  = 10;         // upper arms
+const LEG_W   = 14,  LEG_H  = 65;         // upper legs
+
+// 4. Factory – create a draggable body part
 function part (id, opts) {
-    const w = opts.width || opts.radius * 2 || 0;
-    const h = opts.height || opts.radius * 2 || 0;
-    opts.x = (game.baseWidth - w) / 2 + (opts.dx || 0);
-    opts.y = (opts.baseY || 150);
-    opts.draggable = true;
-    return game.append(id, opts);
+    opts.draggable = true;                // Pixalo flag
+    return game.append(id, opts);         // returns the sprite
 }
 
-// build tighter ragdoll
-const head = part('head', { radius: 22, shape: 'circle', backgroundColor: '#F3A71A', physics: { density: 1, friction: 0.3, restitution: 0.2 }, baseY: 120 });
+/* ------------------------------------------------------------------ */
+/* 5. Assemble the doll                                               */
+/*    All parts are initially centred horizontally and stacked        */
+/*    vertically so they look connected before physics kicks in.      */
+/* ------------------------------------------------------------------ */
+const head = part('head', {
+    shape: 'circle', width: HEAD_D, height: HEAD_D,
+    backgroundColor: '#F3A71A',
+    physics: { density: 1, friction: 0.3, restitution: 0.2 },
+    x: (game.baseWidth - HEAD_D) / 2,
+    y: 50,
+    text: '> <\n_',
+    lineHeight: 0.1
+});
 
-const torso = part('torso', { width: 35, height: 70, backgroundColor: '#268985', physics: { density: 1, friction: 0.3, restitution: 0.1 }, baseY: 190 });
+const torso = part('torso', {
+    width: TORSO_W, height: TORSO_H,
+    backgroundColor: '#268985',
+    physics: { density: 1, friction: 0.3, restitution: 0.1 },
+    x: (game.baseWidth - TORSO_W) / 2,
+    y: head.y + HEAD_D          // Top edge = bottom edge of head
+});
 
-const armL = part('armL', { width: 45, height: 10, backgroundColor: '#F3A71A', physics: { density: 0.8, friction: 0.3 }, dx: -38, baseY: 180 });
+const armL = part('armL', {
+    width: ARM_W, height: ARM_H,
+    backgroundColor: '#F3A71A',
+    physics: { density: 0.8, friction: 0.3 },
+    x: torso.x - ARM_W,        // Right edge = left edge of trunk
+    y: torso.y + 25
+});
 
-const armR = part('armR', { width: 45, height: 10, backgroundColor: '#F3A71A', physics: { density: 0.8, friction: 0.3 }, dx: 38, baseY: 180 });
+const armR = part('armR', {
+    width: ARM_W, height: ARM_H,
+    backgroundColor: '#F3A71A',
+    physics: { density: 0.8, friction: 0.3 },
+    x: torso.x + TORSO_W,      // Left edge = right edge of trunk
+    y: torso.y + 25
+});
 
-const legL = part('legL', { width: 14, height: 65, backgroundColor: '#268985', physics: { density: 1, friction: 0.3 }, dx: -12, baseY: 270 });
+const legL = part('legL', {
+    width: LEG_W, height: LEG_H,
+    backgroundColor: '#268985',
+    physics: { density: 1, friction: 0.3 },
+    x: torso.x,
+    y: torso.y + TORSO_H
+});
 
-const legR = part('legR', { width: 14, height: 65, backgroundColor: '#268985', physics: { density: 1, friction: 0.3 }, dx: 12, baseY: 270 });
+const legR = part('legR', {
+    width: LEG_W, height: LEG_H,
+    backgroundColor: '#268985',
+    physics: { density: 1, friction: 0.3 },
+    x: torso.x + TORSO_W - LEG_W,
+    y: torso.y + TORSO_H
+});
 
-// joint helper
-function join (idA, idB, ox, oy) {
+/* ------------------------------------------------------------------ */
+/* 6. Joint stiffness – single knob to tune the whole doll            */
+/*    0  : spaghetti (no motor, no limit)                             */
+/*    100: mannequin (strong motor, tight angle limits)               */
+/* ------------------------------------------------------------------ */
+const stiffness = 20;   // 0-100 scale
+
+// 7. Helper – create a revolute joint between two bodies
+function join(idA, idB, worldX, worldY, lo = -45, hi = 45) {
     const bA = game.physics.bodies.get(idA);
     const bB = game.physics.bodies.get(idB);
     const anchor = new Box2D.Common.Math.b2Vec2(
-        (game.baseWidth / 2 + ox) / game.physics.SCALE,
-        oy / game.physics.SCALE
+        worldX / game.physics.SCALE,
+        worldY / game.physics.SCALE
     );
     const rjd = new Box2D.Dynamics.Joints.b2RevoluteJointDef();
     rjd.Initialize(bA, bB, anchor);
+
+    if (stiffness > 5) {
+        rjd.enableLimit = true;
+        rjd.lowerAngle = lo * Math.PI / 180;
+        rjd.upperAngle = hi * Math.PI / 180;
+    } else {
+        rjd.enableLimit = false;
+    }
+
+    rjd.maxMotorTorque = stiffness * 0.6;
+    rjd.motorSpeed = 0;
+    rjd.enableMotor = stiffness > 2;
     game.physics.world.CreateJoint(rjd);
 }
 
-// assemble after first step
+
+// 8. Wire the skeleton once physics bodies exist
 game.one('update', () => {
-    join('head', 'torso', 0, 155);
-    join('torso', 'armL', -32, 175);
-    join('torso', 'armR', 32, 175);
-    join('torso', 'legL', -10, 245);
-    join('torso', 'legR', 10, 245);
+    /* Neck: Horizontal center of both + bottom edge of head = top edge of torso */
+    join('head', 'torso',
+        head.x + HEAD_D / 2,
+        head.y + HEAD_D,
+        -25, 25);
+
+    /* Shoulder: Single horizontal edge */
+    join('torso', 'armL',
+        torso.x,
+        torso.y + 25,
+        -70, 40);
+
+    join('torso', 'armR',
+        torso.x + TORSO_W,
+        torso.y + 25,
+        -40, 70);
+
+    /* Pelvis: Lower edge of the torso */
+    join('torso', 'legL',
+        torso.x + LEG_W / 2,
+        torso.y + TORSO_H,
+        -30, 20);
+
+    join('torso', 'legR',
+        torso.x + TORSO_W - LEG_W / 2,
+        torso.y + TORSO_H,
+        -20, 30);
 });

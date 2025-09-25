@@ -7,24 +7,31 @@ When Physics is enabled, you cannot use the features of the [Collision class](ht
 
 ```javascript
 const config = {
-  // Gravity
-  gravity: {
-    x: 0,                       // Horizontal gravity force
-    y: 9.8                      // Vertical gravity force (positive = downward)
-  },
-  
-  // World Settings
-  sleep: true,                  // Allow bodies to sleep when inactive
-  
-  // Default Material Properties
-  friction: 0.2,                // Default friction coefficient (0-1)
-  bounce: 0.2,                  // Default restitution/bounce (0-1)
-  density: 1,                   // Default density
-  
-  // Simulation Settings
-  maxVelocity: 1000,            // Maximum velocity limit
-  velocityIterations: 8,        // Velocity solver iterations per step
-  positionIterations: 3         // Position solver iterations per step
+    // Gravity
+    gravity: {
+        x: 0,                     // Horizontal gravity force
+        y: 9.8                    // Vertical gravity force (positive = downward)
+    },
+
+    // World Settings
+    sleep: true,                  // Allow bodies to sleep when inactive
+
+    // Default Material Properties
+    friction: 0.2,                // Default friction coefficient (0-1)
+    bounce: 0.2,                  // Default restitution/bounce (0-1)
+    density: 1,                   // Default density
+
+    // Simulation Settings
+    maxVelocity: 1000,            // Maximum velocity limit
+    velocityIterations: 8,        // Velocity solver iterations per step
+    positionIterations: 3,        // Position solver iterations per step
+
+    // Drag interaction settings
+    drag: {
+        angularDamping: 1,        // Angular resistance while dragging (0 = free spin, 10+ ≈ locked)
+        linearDamping : 0.1,      // Linear resistance while dragging (0 = no friction, 1+ = sticky)
+        fixedRotation : false     // true = prevent rotation during drag, false = allow natural spin
+    }
 }
 ```
 
