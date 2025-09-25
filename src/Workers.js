@@ -367,7 +367,7 @@ class Workers {
         // Document Events
         document.addEventListener('visibilitychange', () => {
             this.send(wid, {
-                action: 'visibility_change',
+                action: 'visibilitychange',
                 hidden: document.hidden
             });
         });

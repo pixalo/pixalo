@@ -19,7 +19,7 @@ class Entity {
         this.width = config.width || 32;
         this.height = config.height || 32;
 
-        this._data = {};
+        this._data = new Map();
         this.parent = null;
         this.children = new Map();
         this.absoluteX = this.x;
@@ -698,13 +698,12 @@ class Entity {
     }
     data (key, value) {
         if (value === undefined)
-            return this._data[key] || undefined;
-        this._data[key] = value;
+            return this._data.get(key);
+        this._data.set(key, value);
         return this;
     }
     unset (key) {
-        if (typeof this._data[key] !== 'undefined')
-            delete this._data[key];
+        this._data.delete(key);
         return this;
     }
     halt () {

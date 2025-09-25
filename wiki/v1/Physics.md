@@ -189,6 +189,23 @@ Limits the velocity of an entity to a maximum value.
 game.physics.setVelocityLimit(myEntity, 20);
 ```
 
+### `setTransform(entity, {x, y, rotation}): Physics`
+
+Instantly moves and/or rotates a physics body to the specified transform.
+
+| Name     | Type           | Default | Description                                                 |
+|----------|----------------|---------|-------------------------------------------------------------|
+| entity   | Object\|string | —       | The entity (or its id) whose body will be updated.          |
+| x        | number         | —       | New world **x** coordinate (top-left corner).               |
+| y        | number         | —       | New world **y** coordinate (top-left corner).               |
+| rotation | number         | —       | New angle in **degrees** (0 = right, positive = clockwise). |
+
+**Usage Example:**
+```javascript
+// teleport entity to (100, 200) facing 45°
+game.physics.setTransform(myEntity, { x: 100, y: 200, rotation: 45 });
+```
+
 ### `setGravity(x, y): Physics`
 Updates the world’s gravity vector and nudges every non-static body so they wake up and react immediately.
 
@@ -196,9 +213,6 @@ Updates the world’s gravity vector and nudges every non-static body so they wa
 |------|-----------------|---------|------------------------------------------------------------------------------------------|
 | x    | number \| false | –       | Horizontal gravity (m/s²).  Pass `false` as shorthand for zero-gravity (`x = 0, y = 0`). |
 | y    | number          | 0       | Vertical gravity (m/s²).                                                                 |
-
-**Returns:**  
-`Physics` – The physics instance for chaining.
 
 **Usage Examples:**
 ```javascript

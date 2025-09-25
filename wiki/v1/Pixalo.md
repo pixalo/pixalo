@@ -260,15 +260,51 @@ game.delay(1000).then(() => {
 
 ---
 
+## Global Data
+
+### data(key, value): Pixalo | any
+Sets or gets global custom data.
+
+| Name  | Type   | Default   |
+|-------|--------|-----------|
+| key   | string | —         |
+| value | any    | undefined |
+
+**Usage Example:**
+```javascript
+// set
+game.data('highScore', 9500);
+
+// get
+const high = game.data('highScore'); // 9500
+```
+
+---
+
+### unset(key): Pixalo
+Delete a global data from the game.
+
+| Name | Type   | Default |
+|------|--------|---------|
+| key  | string | -       |
+
+**Usage Example:**
+```javascript
+game.unset('highScore'); // remove the key
+game.data('highScore');  // → undefined
+```
+
+---
+
 ## [Background](https://github.com/pixalo/pixalo/wiki/Background) Management
 
 ### `addBackground(source, config = {})`: Pixalo
 Adds a background layer with specified source and configuration.
 
-| Name | Type | Default |
-|------|------|---------|
-| source | String\|Image | - |
-| config | Object | {} |
+| Name   | Type          | Default |
+|--------|---------------|---------|
+| source | String\|Image | -       |
+| config | Object        | {}      |
 
 **Usage Examples:**
 ```javascript

@@ -312,6 +312,21 @@ entity.data('health', 100);
 const health = entity.data('health'); // Returns 100
 ```
 
+### unset(key): Entity
+
+Removes custom data associated with the entity.
+
+| Name | Type   | Description          |
+|------|--------|----------------------|
+| key  | string | The key to remove.   |
+
+**Usage Example:**
+```javascript
+entity.data('health', 100);
+entity.unset('health'); // Removes 'health'
+const health = entity.data('health'); // Returns undefined
+```
+
 ### halt(): Entity
 
 Stops any currently running movement animation.
