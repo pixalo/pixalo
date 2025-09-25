@@ -9,9 +9,10 @@ const game = new Pixalo('#canvas', {
     width: 800,
     height: 600,
     fps: 60,
-    quality: 2,
-    background: 'transparent',
-    resizeTarget: 'window',
+    quality: window.devicePixelRatio || 1,
+    background: 'transparent'|'#fff'|'hsl(178 80.6% 6.1%)',
+    resizeTarget: 'window'|`#${string}`|`.${string}`|HTMLElement,
+    autoStartStop: true,                        // pause rendering when tab is hidden, resume when visible
     grid: GridConfig<object>|Boolean,           // See Grid class documentation
     collision: CollisionConfig<object>|Boolean, // See Collision class documentation
     physics: PhysicsConfig<object>|Boolean,     // See Physics class documentation

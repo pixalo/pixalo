@@ -67,8 +67,10 @@ const dropBox = side => {
         width: 40,
         height: 40,
         backgroundColor: `hsl(${Math.random() * 360}, 70%, 50%)`,
-        physics: { density: 1, restitution: 0.2 }
+        physics: { density: 1, restitution: 0.2 },
+        draggable: true
     });
 };
 dropBox(-1);
-setTimeout(() => dropBox(1), 500);
+
+game.timeout(() => dropBox(1), 500);

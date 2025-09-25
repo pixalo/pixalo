@@ -3,7 +3,7 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-import Box2D from './dependencies/Box2D.esm.min.js';
+import Box2D from './dependencies/Box2D.min.js';
 
 class Physics {
 

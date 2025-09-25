@@ -17,36 +17,46 @@ const game = new Pixalo('#canvas', {
 });
 game.start();
 
-// --- auto sizing ---
-const W = 50, H = 12, MARGIN = 0, PILLAR_W = 60;
-const clearSpan = game.baseWidth - 2 * 150 - 2 * (PILLAR_W / 2);
-const PLANKS = Math.floor((clearSpan + MARGIN) / (W + MARGIN));
-const gap = (clearSpan - W) / (PLANKS - 1);
-const startX = 150 + PILLAR_W;
+// --- auto sizing (responsive pillars) ---
+const isNarrow   = game.baseWidth <= 420;
+const PAD_PCT    = isNarrow ? 0.08  : 0.15;
+const PILLAR_W   = Math.round(game.baseWidth * (isNarrow ? 0.09  : 0.06));
+const PILLAR_H   = game.baseHeight / 2;
+const W          = isNarrow ? 40   : 80;
+const H          = 10;
+const MARGIN     = 0;
+
+const edgeGap   = game.baseWidth * PAD_PCT;
+const clearSpan = game.baseWidth - 2 * edgeGap - 2 * PILLAR_W;
+const PLANKS    = Math.max(3, Math.floor((clearSpan + MARGIN) / (W + MARGIN)));
+const gap       = PLANKS === 1 ? 0 : (clearSpan - W) / (PLANKS - 1);
+const startX    = edgeGap + PILLAR_W;
 
 // --- pillars (centred) ---
 const leftPillar = game.append('leftPillar', {
-    x: 150,
-    y: (game.baseHeight - 300) / 2 + 300 / 2,
-    width: PILLAR_W, height: 300,
+    x: edgeGap,
+    y: game.baseHeight - PILLAR_H,
+    width: PILLAR_W, height: PILLAR_H,
     fill: '#268985',
     physics: { bodyType: 'static' }
 });
+
 const rightPillar = game.append('rightPillar', {
-    x: game.baseWidth - 150,
-    y: (game.baseHeight - 300) / 2 + 300 / 2,
-    width: PILLAR_W, height: 300,
+    x: game.baseWidth - edgeGap - PILLAR_W,
+    y: game.baseHeight - PILLAR_H,
+    width: PILLAR_W, height: PILLAR_H,
     fill: '#268985',
     physics: { bodyType: 'static' }
 });
 
 // --- bridge planks ---
 const bodies = [];
+const plankY = rightPillar.y;
 for (let i = 0; i < PLANKS; i++) {
     const id = `p${i}`;
     game.append(id, {
         x: startX + i * gap,
-        y: game.baseHeight - 270,
+        y: plankY + H/2,
         width: W, height: H,
         fill: '#F3A71A',
         physics: { density: 0.8, friction: 0.4 }
@@ -56,10 +66,9 @@ for (let i = 0; i < PLANKS; i++) {
 
 // --- link planks with revolute joints ---
 for (let i = 1; i < PLANKS; i++) {
-    const anchor = new Box2D.Common.Math.b2Vec2(
-        (startX + i * gap) / game.physics.SCALE,
-        (game.baseHeight - 270) / game.physics.SCALE
-    );
+    const anchorX = (startX + i * gap) / game.physics.SCALE;
+    const anchorY = (plankY + H/2) / game.physics.SCALE;
+    const anchor = new Box2D.Common.Math.b2Vec2(anchorX, anchorY);
     const rjd = new Box2D.Dynamics.Joints.b2RevoluteJointDef();
     rjd.Initialize(bodies[i - 1], bodies[i], anchor);
     game.physics.world.CreateJoint(rjd);
@@ -67,12 +76,12 @@ for (let i = 1; i < PLANKS; i++) {
 
 // --- anchor first & last plank to pillars ---
 const leftAnchor = new Box2D.Common.Math.b2Vec2(
-    startX / game.physics.SCALE,
-    (game.baseHeight - 270) / game.physics.SCALE
+    (startX + W/2) / game.physics.SCALE,
+    (plankY + H/2) / game.physics.SCALE
 );
 const rightAnchor = new Box2D.Common.Math.b2Vec2(
-    (startX + (PLANKS - 1) * gap) / game.physics.SCALE,
-    (game.baseHeight - 270) / game.physics.SCALE
+    (startX + (PLANKS - 1) * gap + W/2) / game.physics.SCALE,
+    (plankY + H/2) / game.physics.SCALE
 );
 
 const ljd = new Box2D.Dynamics.Joints.b2RevoluteJointDef();
@@ -95,7 +104,7 @@ game.physics.world.CreateJoint(weldDef);
 // --- real 2-wheel car ---
 // const carX = (game.baseWidth - 70) / 2; // Center
 const carX = leftPillar.x;
-const carY = 200;
+const carY = PILLAR_H - 80;
 const wheelR = 30;
 
 const chassis = game.append('chassis', {

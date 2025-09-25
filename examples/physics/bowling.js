@@ -70,8 +70,7 @@ ball.on('collide', function collideBall ({entityA}) {
                 fill: 'transparent',
                 text: 'Strike!',
                 color: '#F4A71A',
-                font: '50px Arial',
-                physics: {bodyType: 'static'}
+                font: '50px Arial'
             });
         }, 0);
         ball.off('collide', collideBall);
