@@ -12,7 +12,7 @@ import Pixalo from 'https://cdn.jsdelivr.net/gh/pixalo/pixalo@master/dist/pixalo
 const px = new Pixalo('#canvas', {width: innerWidth, height: innerHeight});
 px.start();
 
-await px.loadAsset('tiles', 'tiles', 'assets/tiles/tiles.png', {
+await px.loadAsset('tiles', 'tiles', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/tiles/tiles.png', {
     tileSize: 64, tiles: {
         grass: [0, 0],
         dirt: [1, 0],
