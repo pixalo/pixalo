@@ -26,7 +26,7 @@ const px = new Pixalo('#canvas', {
 px.start();
 
 await px.wait(
-    px.loadAsset('tiles', 'tiles', 'assets/tiles/tiles.png', {
+    px.loadAsset('tiles', 'tiles', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/tiles/tiles.png', {
         tileSize: 64, tiles: {
             grass   : [0, 0],
             dirt    : [1, 0],
@@ -35,7 +35,7 @@ await px.wait(
             headTree: [3, 0]
         }
     }),
-    px.loadAsset('image', 'character', 'assets/character.png')
+    px.loadAsset('image', 'character', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/character.png')
 );
 
 px.tileMap.create('top-down', {

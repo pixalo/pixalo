@@ -23,8 +23,8 @@ const px = new Pixalo('#canvas', {
 px.start();
 
 await px.wait(
-    px.loadAsset('image', 'character', 'assets/character.png'),
-    px.loadAsset('tiles', 'ground', 'assets/tiles/kenny/ground.png', {
+    px.loadAsset('image', 'character', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/character.png'),
+    px.loadAsset('tiles', 'ground', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/tiles/kenny/ground.png', {
         tileSize: 128,
         tiles: {
             middle  : [0, 1],
@@ -33,7 +33,7 @@ await px.wait(
             platform: [0, 8]
         }
     }),
-    px.loadAsset('tiles', 'items', 'assets/tiles/kenny/items.png', {
+    px.loadAsset('tiles', 'items', 'https://raw.githubusercontent.com/pixalo/pixalo/refs/heads/main/examples/assets/tiles/kenny/items.png', {
         tileSize: 128,
         tiles: {
             flag    : [1, 0],
