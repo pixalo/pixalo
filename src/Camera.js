@@ -390,7 +390,7 @@ class Camera {
 
         // If we are following
         if (this._followedEntity && this._followConfig) {
-            const targetPosition = this._calculateFollowPosition();
+            const targetPosition = this.calcFollowPosition();
             if (targetPosition) {
                 if (this._followConfig.smooth) {
                     // Smooth movement towards the goal
@@ -497,7 +497,7 @@ class Camera {
                 x: config.deadzone?.x || 0,
                 y: config.deadzone?.y || 0
             },
-            smooth: config.smooth !== undefined ? config.smooth : true,
+            smooth: config.smooth ?? true,
             smoothSpeed: config.smoothSpeed || 0.1
         };
 
@@ -512,7 +512,10 @@ class Camera {
         this._followOffset = {x: 0, y: 0};
         return this;
     }
-    _calculateFollowPosition () {
+    /** ======== END ======== */
+
+    /** ======== POSITION HANDLING ======== */
+    calcFollowPosition () {
         if (!this._followedEntity || !this._followConfig) return null;
 
         const entity = this._followedEntity;
@@ -617,6 +620,79 @@ class Camera {
         }
 
         return {x: targetX, y: targetY};
+    }
+    calcFixedPosition (x, y) {
+        const camera = this.engine.camera;
+        const viewportWidth = this.engine.baseWidth / camera.zoom;
+        const viewportHeight = this.engine.baseHeight / camera.zoom;
+
+        // Calculating position relative to viewport
+        let fixedX = camera.x + (x / this.engine.baseWidth) * viewportWidth;
+        let fixedY = camera.y + (y / this.engine.baseHeight) * viewportHeight;
+
+        // If x or y are negative, we calculate from the right/bottom.
+        if (x < 0)
+            fixedX = camera.x + viewportWidth + (x / this.engine.baseWidth) * viewportWidth;
+        if (y < 0)
+            fixedY = camera.y + viewportHeight + (y / this.engine.baseHeight) * viewportHeight;
+
+        return {x: fixedX, y: fixedY};
+    }
+    /** ======== END ======== */
+
+    /** ======== VISIBILITY CHECK ======== */
+    inView (object, padding = 0) {
+        // Calculating viewport taking zoom into account
+        const viewportWidth = this.engine.baseWidth / this.zoom;
+        const viewportHeight = this.engine.baseHeight / this.zoom;
+
+        // Camera view boundaries with extra padding
+        const cameraLeft = this.x - padding;
+        const cameraTop = this.y - padding;
+        const cameraRight = this.x + viewportWidth + padding;
+        const cameraBottom = this.y + viewportHeight + padding;
+
+        let objectBounds;
+
+        // Detecting object type and extracting bounds
+        if (this.engine.isEntity(object)) {
+            const collision = object.collision || {};
+            objectBounds = {
+                left: object.absoluteX + (collision.x || 0),
+                top: object.absoluteY + (collision.y || 0),
+                right: object.absoluteX + (collision.x || 0) + (collision.width || object.width),
+                bottom: object.absoluteY + (collision.y || 0) + (collision.height || object.height)
+            };
+        } else if (object.collision) {
+            objectBounds = {
+                left: object.x + object.collision.x,
+                top: object.y + object.collision.y,
+                right: object.x + object.collision.x + object.collision.width,
+                bottom: object.y + object.collision.y + object.collision.height
+            };
+        } else {
+            objectBounds = {
+                left: object.x || 0,
+                top: object.y || 0,
+                right: (object.x || 0) + (object.width || 0),
+                bottom: (object.y || 0) + (object.height || 0)
+            };
+        }
+
+        // Checking overlap
+        return !(objectBounds.right < cameraLeft ||
+            objectBounds.left > cameraRight ||
+            objectBounds.bottom < cameraTop ||
+            objectBounds.top > cameraBottom);
+    }
+    pointInView (x, y, padding = 0) {
+        const viewportWidth = this.engine.baseWidth / this.zoom;
+        const viewportHeight = this.engine.baseHeight / this.zoom;
+
+        return x >= (this.x - padding) &&
+            x <= (this.x + viewportWidth + padding) &&
+            y >= (this.y - padding) &&
+            y <= (this.y + viewportHeight + padding);
     }
     /** ======== END ======== */
 

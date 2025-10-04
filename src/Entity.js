@@ -14,22 +14,24 @@ class Entity {
         const classNames = config.class || '';
         this.class = new Set(classNames.split(/\s+/).filter(Boolean));
 
-        this.x  = config.x || 0;
-        this.y  = config.y || 0;
-        this.width = config.width || 32;
-        this.height = config.height || 32;
-
-        this._data = new Map();
-        this.parent = null;
-        this.children = new Map();
+        this.x = config.x || 0;
+        this.y = config.y || 0;
         this.absoluteX = this.x;
         this.absoluteY = this.y;
+
+        this.width  = config.width || 32;
+        this.height = config.height || 32;
+
+        this.parent = null;
+        this.children = new Map();
         this.constrainToParent = config.constrainToParent ?? true;
 
         this.styles = {
             ...this.#normalizeBackground(config),
 
             shape: config.shape || 'rectangle',
+
+            position: config.position || 'absolute',
 
             blur: config.blur || 0,
             opacity: config.opacity ?? 1,
@@ -46,7 +48,7 @@ class Entity {
 
             rotation: config.rotation || 0,
 
-            scale: config.scale || 1,
+            scale: config.scale   || 1,
             scaleX: config.scaleX || 1,
             scaleY: config.scaleY || 1,
 
@@ -77,6 +79,12 @@ class Entity {
 
             spikes: config.spikes || 5
         };
+
+        this._data = new Map();
+        if (config?.data) {
+            for (const key in config.data)
+                this.data(key, config.data[key]);
+        }
 
         this.collision = {
             enabled: Boolean(config.collision),
@@ -212,17 +220,26 @@ class Entity {
             );
         }
 
+        // Handle duplicate IDs
+        if (this.children.has(child.id)) {
+            // child.id = `${child.id}_${Date.now()}`;
+            this.engine.error(`Entity (${child.id}) exists with this ID`);
+            return child;
+        }
+
         child.parent = this;
         this.children.set(childId, child);
 
-        child.move({
-            x: 0, y: 0,
-            relative: !this.engine.physicsEnabled
-        });
+        this.engine.debugger.addItem(child.id, child);
+
+        child.updatePosition();
 
         return child;
     }
     layer (value) {
+        if (value === undefined)
+            return this.zIndex;
+
         if (typeof value === 'number') {
             this.zIndex = value;
         } else {
@@ -362,7 +379,11 @@ class Entity {
 
     /** ======== UPDATE ======== */
     updatePosition () {
-        if (this.parent) {
+        if (this.styles.position === 'fixed') {
+            const fixedPos = this.engine.camera.calcFixedPosition(this.x, this.y);
+            this.absoluteX = fixedPos.x;
+            this.absoluteY = fixedPos.y;
+        } else if (this.parent) {
             this.absoluteX = this.parent.absoluteX + this.x;
             this.absoluteY = this.parent.absoluteY + this.y;
         } else {
@@ -370,7 +391,9 @@ class Entity {
             this.absoluteY = this.y;
         }
 
-        this.children.forEach(child => child.updatePosition());
+        this.children.forEach(child => {
+            child.updatePosition();
+        });
     }
     /** ======== END ======== */
 
@@ -517,39 +540,93 @@ class Entity {
 
     /** ======== Wrapper Methods ======== */
     style (property, value) {
-        /* ---------- object form ---------- */
-        if (typeof property === 'object') {
-            const {x, y, rotation, ...rest} = property;
-
-            /* ---- physics branch ---- */
-            if (this.engine?.physicsEnabled && (x !== undefined || y !== undefined || rotation !== undefined))
-                this.engine.physics.setTransform(this, {x, y, rotation});
-
-            /* ---- keep local fields & styles in sync ---- */
-            if (x !== undefined) this.x = x;
-            if (y !== undefined) this.y = y;
-            if (rotation !== undefined) this.styles.rotation = rotation;
-            if (Object.keys(rest).length) Object.assign(this.styles, rest);
-
-            if (x !== undefined || y !== undefined) this.updatePosition();
-            return this;
+        /* ---------- getter mode ---------- */
+        if (value === undefined && typeof property !== 'object') {
+            if (property === 'x' || property === 'y' || property === 'width' || property === 'height')
+                return this[property];
+            return this.styles[property];
         }
 
-        /* ---------- single property ---------- */
+        /* ---------- object form ---------- */
+        if (typeof property === 'object')
+            return this._handleObjStyle(property, value);
+
+        /* ---------- single property setter ---------- */
+        return this._handleSingleStyle(property, value);
+    }
+    _handleObjStyle (property, value) {
+        const {x, y, width, height, ...rest} = property;
+        let needPhysicsUpdateShape = false;
+
+        // physics branch
+        if (this.engine?.physicsEnabled && this.physics && (x !== undefined || y !== undefined || property['rotation'] !== undefined))
+            this.engine.physics.setTransform(this, {x, y, rotation: property['rotation']});
+
+        if (x !== undefined) this.x = x;
+        if (y !== undefined) this.y = y;
+        if (width !== undefined) {
+            if (this.width === this.collision.width)
+                this.collision.width = value;
+
+            this.width = width;
+            needPhysicsUpdateShape = true;
+        }
+        if (height !== undefined) {
+            if (this.height === this.collision.height)
+                this.collision.height = value;
+
+            this.height = height;
+            needPhysicsUpdateShape = true;
+        }
+        if (property['scale'] !== undefined)
+            needPhysicsUpdateShape = true;
+
+        if (Object.keys(rest).length) Object.assign(this.styles, rest);
+
+        if (x !== undefined || y !== undefined) this.updatePosition();
+
+        if (this.engine.physicsEnabled && this.physics) {
+            if (needPhysicsUpdateShape)
+                this.engine.physics.updateShape(this);
+        }
+
+        return this;
+    }
+    _handleSingleStyle (property, value) {
         if (property === 'x' || property === 'y' || property === 'rotation') {
-            if (this.engine?.physicsEnabled)
+            if (this.engine?.physicsEnabled && this.physics)
                 this.engine.physics.setTransform(this, {[property]: value});
 
-            this[property] = value;              // local field
-            this.styles[property] = value;       // styles mirror
+            this[property] = value;
+            this.styles[property] = value;
             if (property === 'x' || property === 'y') this.updatePosition();
             return this;
         }
 
-        /* ---- any other style ---- */
+        if (property === 'width' || property === 'height') {
+            if (this[property] === this.collision[property])
+                this.collision[property] = value;
+
+            this[property] = value;
+
+            if (this.engine.physicsEnabled && this.physics)
+                this.engine.physics.updateShape(this);
+
+            return this;
+        }
+
+        if (property === 'scale') {
+            this.styles[property] = value;
+            if (this.engine.physicsEnabled && this.physics)
+                this.engine.physics.updateShape(this);
+            return this;
+        }
+
         this.styles[property] = value;
+
         return this;
     }
+
     text (text) {
         if (typeof text === 'undefined')
             return this.styles.text;
@@ -557,18 +634,47 @@ class Entity {
         return this;
     }
     img (asset, properties = {}) {
-        const image = this.engine.getAsset(asset);
+        let imageData;
 
-        if (!image)
+        if (typeof asset === 'string' && asset.includes('.')) {
+            imageData = this.#getAssetImage(asset);
+        } else {
+            const assetObj = this.engine.getAsset(asset);
+            if (!assetObj) {
+                throw new Error('Asset not found.');
+            }
+            imageData = {
+                asset: assetObj.asset,
+                source: null,
+                type: assetObj.type
+            };
+        }
+
+        if (!imageData) {
             throw new Error('Asset not found.');
+        }
 
         return this.style({
             backgroundColor: 'transparent',
-            backgroundImage: image.asset,
-            backgroundImageFit: properties.fit || 'cover',
+            backgroundImage: imageData.asset,
+            backgroundImageSource: imageData.source,
+            backgroundImageFit: properties.fit || 'contain',
             backgroundImagePosition: properties.position || 'center',
             backgroundImageRepeat: properties.repeat || false
         });
+    }
+    halt () {
+        const moveAnimation = this.data('moveAnimation');
+        if (moveAnimation) {
+            cancelAnimationFrame(moveAnimation);
+            this.unset('moveAnimation');
+
+            // Wait for real situations
+            this.engine.timeout(() => {
+                this.trigger('moveStop', {x: this.x, y: this.y});
+            }, 5);
+        }
+        return this;
     }
     move (options, y = 0, duration = 0) {
         this.halt(); // cancel any previous move-animation
@@ -688,6 +794,17 @@ class Entity {
         this.data('moveAnimation', animationId);
         return this;
     }
+    jump (force, config = {}) {
+        this.data('jumped', true);
+        this.move({
+            y: -force,
+            duration: 300,
+            easing: 'linear',
+            ...config,
+            onComplete: () => this.unset('jumped')
+        });
+        return this;
+    }
     hide () {
         this.style('visible', false);
         return this;
@@ -706,19 +823,6 @@ class Entity {
         this._data.delete(key);
         return this;
     }
-    halt () {
-        const moveAnimation = this.data('moveAnimation');
-        if (moveAnimation) {
-            cancelAnimationFrame(moveAnimation);
-            this.unset('moveAnimation');
-
-            // Wait for real situations
-            this.engine.timeout(() => {
-                this.trigger('moveStop', {x: this.x, y: this.y});
-            }, 5);
-        }
-        return this;
-    }
     addClass (...names) {
         names.forEach(n => this.class.add(n));
         return this;
@@ -733,6 +837,18 @@ class Entity {
     }
     hasClass (name) {
         return this.class.has(name);
+    }
+    setFixed (x = null, y = null) {
+        this.styles.position = 'fixed';
+        if (x !== null) this.x = x;
+        if (y !== null) this.y = y;
+        this.updatePosition();
+        return this;
+    }
+    setAbsolute () {
+        this.styles.position = 'absolute';
+        this.updatePosition();
+        return this;
     }
 
     /** ======== SpriteSheet ======== */
@@ -887,10 +1003,18 @@ class Entity {
     render (ctx) {
         if (!this.styles.visible) return;
 
+        // Checking if the entity is in the camera's view
+        if (!this.engine.camera.inView(this))
+            return;
+
+        if (this.styles.position === 'fixed') {
+            this.updatePosition();
+        }
+
         ctx.save();
 
-        // Calling the beforerender event before applying any changes
-        this.trigger('beforerender', ctx);
+        // Calling the beforeRender event before applying any changes
+        this.trigger('beforeRender', ctx);
 
         // Apply transforms
         ctx.translate(this.absoluteX + this.width / 2, this.absoluteY + this.height / 2);
@@ -955,32 +1079,10 @@ class Entity {
             ctx.restore();
         }
 
-        // Calling the afterrender event before the final restore
-        this.trigger('afterrender', ctx);
+        // Calling the afterRender event before the final restore
+        this.trigger('afterRender', ctx);
 
         ctx.restore();
-
-        // Debug rendering
-        if (this.engine?.debugger?.active) {
-            ctx.save();
-
-            // Set blendMode for debug visualization
-            ctx.globalCompositeOperation = 'source-over';
-
-            // Re-apply transforms for debug
-            ctx.translate(this.absoluteX + this.width / 2, this.absoluteY + this.height / 2);
-            ctx.rotate(this.styles.rotation * Math.PI / 180);
-            ctx.scale(
-                (this.styles.flipX ? -1 : 1) * this.styles.scaleX * this.styles.scale,
-                (this.styles.flipY ? -1 : 1) * this.styles.scaleY * this.styles.scale
-            );
-            ctx.transform(1, this.styles.skewY, this.styles.skewX, 1, 0, 0);
-
-            // Render debug info
-            this._renderDebugInfo(ctx);
-
-            ctx.restore();
-        }
 
         // Render children
         if (this.children.size > 0) {
@@ -1168,6 +1270,7 @@ class Entity {
         this.style('backgroundColor', 'transparent');
 
         const image = this.styles.backgroundImage;
+        const source = this.styles.backgroundImageSource;
         const fit = this.styles.backgroundImageFit;
         const position = this.styles.backgroundImagePosition;
         const repeat = this.styles.backgroundImageRepeat;
@@ -1178,19 +1281,20 @@ class Entity {
         let targetY = -this.height / 2;
 
         if (!repeat) {
-            // Calculating image size based on fit
+            const imageWidth = source ? source.width : image.width;
+            const imageHeight = source ? source.height : image.height;
+
             const scale = fit === 'contain' ? Math.min(
-                this.width / image.width, this.height / image.height
+                this.width / imageWidth, this.height / imageHeight
             ) : fit === 'cover' ? Math.max(
-                this.width / image.width, this.height / image.height
+                this.width / imageWidth, this.height / imageHeight
             ) : 1;
 
             if (fit !== 'stretch') {
-                targetWidth = image.width * scale;
-                targetHeight = image.height * scale;
+                targetWidth = imageWidth * scale;
+                targetHeight = imageHeight * scale;
             }
 
-            // Calculating position based on position
             if (position.includes('center')) {
                 targetX = -targetWidth / 2;
                 targetY = -targetHeight / 2;
@@ -1201,13 +1305,21 @@ class Entity {
                 if (position.includes('bottom')) targetY = this.height / 2 - targetHeight;
             }
 
-            ctx.drawImage(image, targetX, targetY, targetWidth, targetHeight);
+            if (source) {
+                ctx.drawImage(
+                    image,
+                    source.x, source.y, source.width, source.height, // source
+                    targetX, targetY, targetWidth, targetHeight     // destination
+                );
+            } else {
+                ctx.drawImage(image, targetX, targetY, targetWidth, targetHeight);
+            }
         } else {
-            // Repeating image rendering
             ctx.fillStyle = ctx.createPattern(image, 'repeat');
             ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
         }
     }
+
     _renderText (ctx) {
         if (!this.styles.text) return;
 
@@ -1568,112 +1680,6 @@ class Entity {
     }
     /** ======== END ======== */
 
-    /** ======== DEBUGGER ======== */
-    _renderDebugInfo (ctx) {
-        if (!this.collision.enabled) return;
-
-        // Setting basic styles for debug display
-        ctx.lineWidth = 1;
-
-        if (this.collision.points) {
-            this._renderCustomCollisionShape(ctx);
-        } else {
-            this._renderCollisionShape(ctx);
-        }
-    }
-    _renderCustomCollisionShape (ctx) {
-        const points = this.collision.points;
-        if (!points || points.length < 2) return;
-
-        // Draw the outer line in white for greater clarity.
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-
-        if (this.styles.customPath) {
-            let i = 0;
-            while (i < points.length - 1) {
-                const curr = points[i];
-                const next = points[i + 1];
-
-                const control1 = {
-                    x: curr.x + (next.x - curr.x) / 3,
-                    y: curr.y + (next.y - curr.y) / 3
-                };
-                const control2 = {
-                    x: curr.x + 2 * (next.x - curr.x) / 3,
-                    y: curr.y + 2 * (next.y - curr.y) / 3
-                };
-
-                ctx.bezierCurveTo(
-                    control1.x, control1.y,
-                    control2.x, control2.y,
-                    next.x, next.y
-                );
-
-                i++;
-            }
-        } else {
-            for (let i = 1; i < points.length; i++) {
-                ctx.lineTo(points[i].x, points[i].y);
-            }
-        }
-
-        ctx.closePath();
-        ctx.stroke();
-
-        // Draw a fill with a semi-transparent red color.
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
-        ctx.fill();
-        ctx.stroke();
-
-        // Show points in advanced debug mode
-        if (this.engine.debugger.level === 'advanced') {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-            points.forEach(point => {
-                ctx.beginPath();
-                ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
-                ctx.fill();
-            });
-        }
-    }
-    _renderCollisionShape (ctx) {
-        ctx.save();
-
-        // Calculate offset for collision box
-        const offsetX = (-this.width / 2) + this.collision.x + (this.collision.width / 2);
-        const offsetY = (-this.height / 2) + this.collision.y + (this.collision.height / 2);
-
-        ctx.translate(offsetX, offsetY);
-
-        const originalStyles = {...this.styles};
-
-        const debugStyles = {
-            backgroundColor: 'rgba(255, 0, 0, 0.3)',
-            borderColor: 'rgba(255, 0, 0, 0.5)',
-            borderWidth: 1,
-            color: 'rgba(255, 0, 0, 0.3)'
-        };
-
-        // Temporarily change width and height for collision box
-        const originalWidth = this.width;
-        const originalHeight = this.height;
-        this.width = this.collision.width;
-        this.height = this.collision.height;
-
-        Object.assign(this.styles, debugStyles);
-        this.renderShape(ctx);
-
-        // Restore original dimensions
-        this.width = originalWidth;
-        this.height = originalHeight;
-        this.styles = originalStyles;
-
-        ctx.restore();
-    }
-    /** ======== END ======== */
-
     kill () {
         if (!this.engine) return false;
 
@@ -1704,6 +1710,9 @@ class Entity {
         this.trigger('kill');
         this.engine.trigger('kill', this.id);
 
+        // Debugger
+        this.engine.debugger.removeItem(this.id);
+
         // Clear references
         this.parent = null;
         this.engine = null;
@@ -1715,21 +1724,32 @@ class Entity {
         const background = {};
 
         background.backgroundColor = config.fill ?? config.backgroundColor;
+        if (background.backgroundColor === undefined)
+            background.backgroundColor = 'transparent';
+
         background.backgroundGradient = config.gradient ?? config.backgroundGradient;
         background.fill = background.backgroundColor;
 
         let imageConfig = config.image ?? config.backgroundImage;
 
         if (typeof imageConfig === 'string') {
-            background.backgroundImage = this.#getAssetImage(imageConfig);
-            background.backgroundImageFit = config.backgroundImageFit || 'contain';
-            background.backgroundImagePosition = config.backgroundImagePosition || 'center';
-            background.backgroundImageRepeat = config.backgroundImageRepeat || false;
+            const imageData = this.#getAssetImage(imageConfig);
+            if (imageData) {
+                background.backgroundImage = imageData.asset;
+                background.backgroundImageSource = imageData.source || null; // For tiles
+                background.backgroundImageFit = config.backgroundImageFit || 'contain';
+                background.backgroundImagePosition = config.backgroundImagePosition || 'center';
+                background.backgroundImageRepeat = config.backgroundImageRepeat || false;
+            }
         } else if (typeof imageConfig === 'object' && (imageConfig?.asset || imageConfig?.src)) {
-            background.backgroundImage = imageConfig?.asset || this.#getAssetImage(imageConfig.src);
-            background.backgroundImageFit = imageConfig.fit || 'contain';
-            background.backgroundImagePosition = imageConfig.position || 'center';
-            background.backgroundImageRepeat = imageConfig.repeat || false;
+            const imageData = imageConfig?.asset || this.#getAssetImage(imageConfig.src);
+            if (imageData) {
+                background.backgroundImage = imageData.asset || imageData;
+                background.backgroundImageSource = imageData.source || null;
+                background.backgroundImageFit = imageConfig.fit || 'contain';
+                background.backgroundImagePosition = imageConfig.position || 'center';
+                background.backgroundImageRepeat = imageConfig.repeat || false;
+            }
         }
 
         return background;
@@ -1737,7 +1757,30 @@ class Entity {
     #getAssetImage (id) {
         if (typeof id === 'object' && id?.asset)
             return id.asset;
-        return this.engine.getAsset?.(id)?.asset;
+
+        if (typeof id === 'string' && id.includes('.')) {
+            const [assetId, tileName] = id.split('.');
+            const asset = this.engine.getAsset?.(assetId);
+
+            if (asset && asset.type === 'tiles' && asset.config.tiles[tileName]) {
+                return {
+                    asset: asset.asset,
+                    source: asset.config.tiles[tileName],
+                    type: 'tiles'
+                };
+            }
+        }
+
+        const asset = this.engine.getAsset?.(id);
+        if (asset) {
+            return {
+                asset: asset.asset,
+                source: null,
+                type: asset.type
+            };
+        }
+
+        return null;
     }
 
 }

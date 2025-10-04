@@ -63,7 +63,7 @@ let count = 0;
 const dropBox = side => {
     game.append(`box${++count}`, {
         x: game.baseWidth / 2 + side * 120,
-        y: 200,
+        y: 50,
         width: 40,
         height: 40,
         backgroundColor: `hsl(${Math.random() * 360}, 70%, 50%)`,

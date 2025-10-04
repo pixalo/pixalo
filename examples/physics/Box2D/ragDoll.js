@@ -49,13 +49,14 @@ const head = part('head', {
     physics: { density: 1, friction: 0.3, restitution: 0.2 },
     x: (game.baseWidth - HEAD_D) / 2,
     y: 50,
-    text: '> <\n_',
+    text: '> <\n_',             // Face
     lineHeight: 0.1
 });
 
 const torso = part('torso', {
     width: TORSO_W, height: TORSO_H,
     backgroundColor: '#268985',
+    borderRadius: 6,
     physics: { density: 1, friction: 0.3, restitution: 0.1 },
     x: (game.baseWidth - TORSO_W) / 2,
     y: head.y + HEAD_D          // Top edge = bottom edge of head
@@ -64,6 +65,7 @@ const torso = part('torso', {
 const armL = part('armL', {
     width: ARM_W, height: ARM_H,
     backgroundColor: '#F3A71A',
+    borderRadius: 6,
     physics: { density: 0.8, friction: 0.3 },
     x: torso.x - ARM_W,        // Right edge = left edge of trunk
     y: torso.y + 25
@@ -72,6 +74,7 @@ const armL = part('armL', {
 const armR = part('armR', {
     width: ARM_W, height: ARM_H,
     backgroundColor: '#F3A71A',
+    borderRadius: 6,
     physics: { density: 0.8, friction: 0.3 },
     x: torso.x + TORSO_W,      // Left edge = right edge of trunk
     y: torso.y + 25
@@ -80,6 +83,7 @@ const armR = part('armR', {
 const legL = part('legL', {
     width: LEG_W, height: LEG_H,
     backgroundColor: '#268985',
+    borderRadius: 6,
     physics: { density: 1, friction: 0.3 },
     x: torso.x,
     y: torso.y + TORSO_H
@@ -88,6 +92,7 @@ const legL = part('legL', {
 const legR = part('legR', {
     width: LEG_W, height: LEG_H,
     backgroundColor: '#268985',
+    borderRadius: 6,
     physics: { density: 1, friction: 0.3 },
     x: torso.x + TORSO_W - LEG_W,
     y: torso.y + TORSO_H
@@ -98,10 +103,10 @@ const legR = part('legR', {
 /*    0  : spaghetti (no motor, no limit)                             */
 /*    100: mannequin (strong motor, tight angle limits)               */
 /* ------------------------------------------------------------------ */
-const stiffness = 20;   // 0-100 scale
+const stiffness = 6;   // 0-100 scale
 
 // 7. Helper – create a revolute joint between two bodies
-function join(idA, idB, worldX, worldY, lo = -45, hi = 45) {
+function join (idA, idB, worldX, worldY, lo = -45, hi = 45) {
     const bA = game.physics.bodies.get(idA);
     const bB = game.physics.bodies.get(idB);
     const anchor = new Box2D.Common.Math.b2Vec2(
@@ -129,30 +134,13 @@ function join(idA, idB, worldX, worldY, lo = -45, hi = 45) {
 // 8. Wire the skeleton once physics bodies exist
 game.one('update', () => {
     /* Neck: Horizontal center of both + bottom edge of head = top edge of torso */
-    join('head', 'torso',
-        head.x + HEAD_D / 2,
-        head.y + HEAD_D,
-        -25, 25);
+    join('head', 'torso', head.x + HEAD_D / 2, head.y + HEAD_D, -25, 25);
 
     /* Shoulder: Single horizontal edge */
-    join('torso', 'armL',
-        torso.x,
-        torso.y + 25,
-        -70, 40);
-
-    join('torso', 'armR',
-        torso.x + TORSO_W,
-        torso.y + 25,
-        -40, 70);
+    join('torso', 'armL', torso.x, torso.y + 25, -70, 40);
+    join('torso', 'armR', torso.x + TORSO_W, torso.y + 25, -40, 70);
 
     /* Pelvis: Lower edge of the torso */
-    join('torso', 'legL',
-        torso.x + LEG_W / 2,
-        torso.y + TORSO_H,
-        -30, 20);
-
-    join('torso', 'legR',
-        torso.x + TORSO_W - LEG_W / 2,
-        torso.y + TORSO_H,
-        -20, 30);
+    join('torso', 'legL', torso.x + LEG_W / 2, torso.y + TORSO_H, -30, 20);
+    join('torso', 'legR', torso.x + TORSO_W - LEG_W / 2, torso.y + TORSO_H, -20, 30);
 });

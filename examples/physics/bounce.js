@@ -28,7 +28,8 @@ game.append('ground', {
 // drop a ball every click
 game.on('click', ({ worldX, worldY }) => {
     game.append(`b${Date.now()}`, {
-        x: worldX, y: worldY, radius: 20,
+        x: worldX, y: worldY,
+        width: 20, height: 20,
         shape: 'circle', fill: `hsl(${Math.random() * 360}, 70%, 50%)`,
         draggable: true,
         physics: { restitution: 0.9, density: 1 }

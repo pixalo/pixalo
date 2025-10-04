@@ -3,17 +3,18 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-import Utils from './Utils.js';
-import Bezier from './Bezier.js';
-import Ease from './Ease.js';
-import Camera from './Camera.js';
-import Background from './Background.js';
-import Grid from './Grid.js';
-import Entity from './Entity.js';
-import Collision from './Collision.js';
-import Physics from './Physics.js';
-import TileMap from './TileMap.js';
-import Emitters from './Emitters.js';
+import Utils        from './Utils.js';
+import Debugger     from './Debugger.js';
+import Bezier       from './Bezier.js';
+import Ease         from './Ease.js';
+import Camera       from './Camera.js';
+import Background   from './Background.js';
+import Grid         from './Grid.js';
+import Entity       from './Entity.js';
+import Collision    from './Collision.js';
+import Physics      from './Physics.js';
+import TileMap      from './TileMap.js';
+import Emitters     from './Emitters.js';
 import AudioManager from './AudioManager.js';
 
 class Pixalo extends Utils {
@@ -79,28 +80,20 @@ class Pixalo extends Utils {
         };
         this.baseWidth = this.config.width;
         this.baseHeight = this.config.height;
-        this.debugger = {
-            active: config.debugger || false,
-            level: 'advanced',
+
+        this.debugger = new Debugger(this, {
+            active: Boolean(config.debugger),
+            ...config.debugger || {},
             fps: {
                 target: this.config.fps,
-                actual: this.config.fps,
-                ratio: 100
-            },
-            lastFpsUpdate: performance.now(),
-            frameCount: 0,
-            targetFrameCount: 0
-        };
-
+                actual: this.config.fps
+            }
+        });
         this.running = false;
         this.lastTime = 0;
-        this.draggedEntity = null;
-        this.draggedEntities = new Map();
-        this.hoveredEntity = null;
 
         this.background = new Background(this);
-
-        this.camera = new Camera(this, config.camera);
+        this.camera     = new Camera(this, config.camera);
 
         this.gridEnabled = Boolean(config.grid);
         this.grid = new Grid(this, config.grid || {});
@@ -111,14 +104,11 @@ class Pixalo extends Utils {
         this.collisionEnabled = Boolean(config.collision);
         this.collision = new Collision();
 
-        this.activeTileMap = null;
-        this.tileMap = new TileMap(this);
-
+        this.tileMap  = new TileMap(this);
         this.emitters = new Emitters(this);
+        this.audio    = new AudioManager(this.config.worker);
 
-        this.audio = new AudioManager(this.config.worker);
-
-        this.animations = {};
+        this.animations   = {};
         this.maxDeltaTime = 1000 / 30;
 
         const canvasConfig = {
@@ -159,6 +149,9 @@ class Pixalo extends Utils {
             });
         }
 
+        this.draggedEntity   = null;
+        this.draggedEntities = new Map();
+        this.hoveredEntity   = null;
         this._setupEventListeners();
 
         this.trigger('ready');
@@ -615,16 +608,16 @@ class Pixalo extends Utils {
 
         this.background._updateLayers(deltaTime);
 
-        if (this.physicsEnabled)
-            this.physics.update(deltaTime);
-
-        if (this.activeTileMap)
+        if (this.tileMap.running)
             this.tileMap.update();
 
         for (const [_, entity] of this.entities) {
             if (typeof entity.update === 'function')
                 entity.update(deltaTime);
         }
+
+        if (this.physicsEnabled)
+            this.physics.update(deltaTime);
 
         if (this.collisionEnabled && !this.physicsEnabled) {
             const collidableEntities = Array.from(this.entities.values()).filter(
@@ -643,12 +636,12 @@ class Pixalo extends Utils {
         this.ctx.scale(this.config.quality, this.config.quality);
         this.camera.apply();
 
-        this.trigger('beforerender', this.ctx);
+        this.trigger('beforeRender', this.ctx);
 
         this.background._renderLayers(this.ctx, false);
 
-        if (this.activeTileMap)
-            this.tileMap.render(this.activeTileMap);
+        if (this.tileMap.running)
+            this.tileMap._renderMap();
 
         const sortedEntities = Array.from(this.entities.values()).sort(
             (a, b) => a.zIndex - b.zIndex
@@ -671,8 +664,13 @@ class Pixalo extends Utils {
         if (this.gridEnabled)
             this.grid.render(this.ctx);
 
+        this.debugger.render(this.ctx);
+
+        this.trigger('afterRender', this.ctx);
+
         this.ctx.restore();
-        this.renderDebugInfo();
+
+        this.debugger.renderPanel();
     }
 
     start () {
@@ -731,12 +729,12 @@ class Pixalo extends Utils {
         this.background.clear();
         this.emitters.clear();
         this.physics.reset();
+        this.tileMap.reset();
 
         // Reset state variables
         this.draggedEntity = null;
         this.draggedEntities.clear();
         this.hoveredEntity = null;
-        this.activeTileMap = null;
         this.animations = {};
         this.lastTime = 0;
 
@@ -803,80 +801,10 @@ class Pixalo extends Utils {
 
     /** ======== DEBUGGER ======== */
     enableDebugger () {
-        this.debugger.active = true;
-        return this;
+        return this.debugger.enableDebugger();
     }
     disableDebugger () {
-        this.debugger.active = false;
-        this.entities.forEach(entity => {
-            this.disableEntityDebug(entity);
-        });
-        return this;
-    }
-    renderDebugInfo () {
-        if (!this.debugger.active) return;
-
-        const ctx = this.ctx;
-        const padding = 10;
-        const lineHeight = 20;
-        let y = padding;
-
-        ctx.save();
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(padding, padding, 300, 500);
-        ctx.font = '12px monospace';
-        ctx.fillStyle = '#ffffff';
-
-        ctx.fillStyle = '#00ff00';
-        ctx.fillText('=== Performance ===', padding + 5, y += lineHeight);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(`FPS: ${this.debugger.fps.actual}`, padding + 5, y += lineHeight);
-        ctx.fillText(`Max FPS: ${this.debugger.fps.target}`, padding + 5, y += lineHeight);
-        ctx.fillText(`FPS Ratio: ${this.debugger.fps.ratio}%`, padding + 5, y += lineHeight);
-
-        ctx.fillStyle = '#00ff00';
-        ctx.fillText('=== System ===', padding + 5, y += lineHeight * 1.5);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(`Quality: ${this.config.quality}x`, padding + 5, y += lineHeight);
-        ctx.fillText(`Canvas Size: ${this.canvas.width}x${this.canvas.height}`, padding + 5, y += lineHeight);
-
-        ctx.fillStyle = '#00ff00';
-        ctx.fillText('=== State ===', padding + 5, y += lineHeight * 1.5);
-        ctx.fillStyle = '#ffffff';
-
-        let totalEntities = 0;
-        let visibleEntities = 0;
-        const countEntities = (entity) => {
-            totalEntities++;
-            if (entity.styles.visible) visibleEntities++;
-            entity.children.forEach(countEntities);
-        };
-        this.entities.forEach(countEntities);
-        ctx.fillText(`Total Entities: ${totalEntities}`, padding + 5, y += lineHeight);
-        ctx.fillText(`Visible Entities: ${visibleEntities}`, padding + 5, y += lineHeight);
-
-        ctx.fillStyle = '#00ff00';
-        ctx.fillText('=== Physics & Collision ===', padding + 5, y += lineHeight * 1.5);
-        ctx.fillStyle = '#ffffff';
-        let activeCollisions = 0;
-        this.entities.forEach(entity => {
-            if (entity.collision?.enabled) activeCollisions++;
-        });
-        ctx.fillText(`Physics: ${this.physicsEnabled ? 'Enabled' : 'Disabled'}`, padding + 5, y += lineHeight);
-        ctx.fillText(`Collision: ${this.collisionEnabled ? 'Enabled' : 'Disabled'}`, padding + 5, y += lineHeight);
-        ctx.fillText(`Collision Objects: ${activeCollisions}`, padding + 5, y += lineHeight);
-
-        ctx.fillStyle = '#00ff00';
-        ctx.fillText('=== Grid System ===', padding + 5, y += lineHeight * 1.5);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(`Grid Enabled: ${this.gridEnabled ? 'Yes' : 'No'}`, padding + 5, y += lineHeight);
-        if (this.gridEnabled) {
-            ctx.fillText(`Grid Size: ${this.grid.width}x${this.grid.height}`, padding + 5, y += lineHeight);
-            ctx.fillText(`Major Grid: Every ${this.grid.majorGridEvery}`, padding + 5, y += lineHeight);
-            ctx.fillText(`Zoom Range: ${this.grid.minZoomToShow} - ${this.grid.maxZoomToShow}`, padding + 5, y += lineHeight);
-        }
-
-        ctx.restore();
+        return this.debugger.disableDebugger();
     }
 
     log (...args) {
@@ -1074,13 +1002,14 @@ class Pixalo extends Utils {
     append (id, config = {}) {
         // Convert input to Entity instance if needed
         const entity = id instanceof Entity ? id : (
-            config instanceof Entity ? config : new Entity(id, {
-                ...config, engine: this
-        }));
+            config instanceof Entity ? config : new Entity(id, {...config, engine: this})
+        );
     
         // Handle duplicate IDs
         if (this.entities.has(entity.id)) {
-            entity.id = `${entity.id}_${Date.now()}`;
+            // entity.id = `${entity.id}_${Date.now()}`;
+            this.error(`Entity (${entity.id}) exists with this ID`);
+            return entity;
         }
     
         // Setup entity
@@ -1094,6 +1023,8 @@ class Pixalo extends Utils {
         if (this.physicsEnabled && (entity.physics || config.physics)) {
             this.physics.addEntity(entity, entity.physics || config.physics);
         }
+
+        this.debugger.addItem(entity.id, entity);
     
         return entity;
     }
@@ -1147,23 +1078,6 @@ class Pixalo extends Utils {
     disableCollisions () {
         this.collisionEnabled = false;
         return this;
-    }
-    /** ======== END ======== */
-
-    /** ======== TILE MAP ======== */
-    createTileMap (config) {
-        return this.tileMap.create(config);
-    }
-    renderTileMap (tilemap) {
-        this.activeTileMap = tilemap;
-        return this;
-    }
-    addTile (layer, symbol, x = 0, y = 0) {
-        this.tileMap.addTile(...arguments);
-        return this;
-    }
-    exportTileMap (layer) {
-        return this.tileMap.exportLayers(layer);
     }
     /** ======== END ======== */
 

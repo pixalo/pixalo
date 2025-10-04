@@ -33,7 +33,8 @@ const sides = {
 let ammo = 0;
 game.on('click', ({worldX, worldY}) => {
     const ball = game.append(`a${++ammo}`, {
-        x: worldX, y: worldY, radius: 12,
+        x: worldX, y: worldY,
+        width: 12, height: 12,
         shape: 'circle', fill: '#f39c12',
         physics: {density: 2, restitution: 0.5}
     });

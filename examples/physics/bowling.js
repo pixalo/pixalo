@@ -52,8 +52,9 @@ for (let row = 0; row < 3; row++) {
 
 // bowling ball
 const ball = game.append('ball', {
+    shape: 'circle',
     x: 0, y: game.baseHeight - 120,
-    radius: 25, shape: 'circle',
+    width: 25, height: 25,
     backgroundColor: '#268985',
     draggable: true,
     physics: {density: 1.5, friction: 0.05, restitution: 0.05}

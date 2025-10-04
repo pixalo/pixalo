@@ -43,10 +43,11 @@ for (let i = 0; i < COUNT; i++) {
 // knock-out bullet on click
 game.on('click', ({ worldX, worldY }) => {
     const bullet = game.append(`bullet_${Date.now()}`, {
+        shape: 'circle',
         x: worldX,
         y: worldY,
-        radius: 15,
-        shape: 'circle',
+        width: 15,
+        height: 15,
         backgroundColor: '#F3A71B',
         physics: { density: 3 }
     });

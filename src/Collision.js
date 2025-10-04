@@ -215,6 +215,20 @@ class Collision {
 
         return 'top';
     }
+    getSideFromCenters (entityA, entityB) {
+        const cxA = entityA.absoluteX + (entityA.width >> 1);
+        const cyA = entityA.absoluteY + (entityA.height >> 1);
+        const cxB = entityB.absoluteX + (entityB.width >> 1);
+        const cyB = entityB.absoluteY + (entityB.height >> 1);
+
+        const dx = cxA - cxB;
+        const dy = cyA - cyB;
+        const adx = Math.abs(dx);
+        const ady = Math.abs(dy);
+
+        if (adx > ady) return dx > 0 ? 'right' : 'left';
+        return dy > 0 ? 'bottom' : 'top';
+    }
     getOppositeSide (side) {
         const opposites = {
             'left': 'right',
