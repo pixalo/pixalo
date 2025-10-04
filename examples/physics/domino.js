@@ -44,7 +44,7 @@ for (let i = 0; i < 25; i++) {
 const ball = game.append('starter', {
     x: 0,
     y: game.baseHeight - 310,
-    radius: 25,
+    width: 25, height: 25,
     shape: 'circle',
     backgroundColor: '#F4A71A',
     physics: { density: 2 }

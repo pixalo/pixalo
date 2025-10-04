@@ -35,7 +35,7 @@ const bumpers = [];
 for (let i = 0; i < 5; i++) {
     const b = game.append(`bumper_${i}`, {
         x: 200 + i * 120, y: 200 + (i % 2) * 80,
-        radius: 20, shape: 'circle',
+        width: 20, height: 20, shape: 'circle',
         fill: '#F3A71A',
         physics: { bodyType: 'static', restitution: 1.5 }
     });

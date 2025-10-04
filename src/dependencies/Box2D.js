@@ -1,5 +1,6 @@
 /**
- * Copyright (c) 2006-2007 Erin Catto https://box2d.org
+ * Copyright (c) 2006-2007 Erin Catto
+ * Box2DFlash v2.1 alpha | https://www.box2dflash.org
  */
 "use strict"
 

@@ -1,317 +1,955 @@
-The TileMap class is a comprehensive tile-based map system for 2D games that handles layer management, tile rendering, collision detection, and tile animations. It provides powerful features for creating complex game worlds with multiple layers, animated tiles, and various collision types including solid, platform, and trigger collisions.
+The TileMap class provides comprehensive tile-based map creation and management for 2D games. It handles tile rendering,
+collision detection, animations, physics integration, and user interactions. The class seamlessly integrates with both
+the Collision and Physics systems of the Pixalo game engine.
+
+> [!NOTE]
+> TileMap automatically integrates with the active collision or physics system. When Physics is enabled, tiles with
+> collision properties become physics entities. When only Collision is enabled, tiles use the collision detection
+> system.
+
+## Configuration Object
+
+```javascript
+const config = {
+    tileBaseSize: 32,              // Base size of tiles in pixels
+    overlap: 1,                    // Pixel overlap for seamless rendering
+
+    // Layer definitions
+    layers: {
+        background: [               // Layer as array of strings
+            '##########',
+            '#        #',
+            '#   P    #',
+            '#        #',
+            '##########'
+        ],
+        foreground: [              // Or as array of arrays
+            ['#', '#', '#'],
+            [' ', 'P', ' '],
+            ['#', '#', '#']
+        ]
+    },
+
+    // Tile definitions
+    tiles: {
+        '#': 'tileset.wall',             // Simple tile reference
+        'P': {                           // Advanced tile configuration
+            tile: 'tileset.platform',
+            collision: {
+                type: 'platform',        // 'solid', 'platform', 'sensor'
+                bounds: [0, 0, 32, 16],  // [x, y, width, height]
+                side: 'top',             // For platforms: which side is solid
+                onCollide: (data) => {}, // Collision callback
+                onCollisionEnd: (data) => {}
+            },
+            physics: {                   // Physics properties (when physics enabled)
+                friction: 0.8,
+                restitution: 0.2,
+                density: 1.0,
+                bodyType: 'static'
+            },
+
+            // Tile transformations
+            rotation: 0,                 // Rotation in degrees
+            scale: 1,                    // Uniform scale
+            scaleX: 1,                   // Horizontal scale
+            scaleY: 1,                   // Vertical scale
+            skewX: 0,                    // Horizontal skew
+            skewY: 0,                    // Vertical skew
+
+            // Animation support
+            frames: ['tile.frame1', 'tile.frame2'], // Animation frames
+            frameRate: 8,                // Frames per second
+            loop: true,                  // Loop animation
+            playing: true,               // Auto-start animation
+
+            // Event handlers
+            onClick: (event) => {},      // Click handler
+            onRightClick: (event) => {}, // Right-click handler
+            onHover: (event) => {},      // Hover enter handler
+            onHoverOut: (event) => {},   // Hover exit handler
+
+            // Composite tiles
+            parts: [{                    // Additional tile parts
+                tile: 'tileset.decoration',
+                offsetX: 0,
+                offsetY: -16
+            }]
+        }
+    },
+}
+```
 
 ## Public Methods
 
-### create(config): Object
-Creates and initializes a tilemap with the provided configuration including layers and tiles definitions.
+### `create(name, config): TileMap`
 
-| Name | Type | Default |
-|------|------|---------|
-| config | Object | - |
+Creates a new tilemap with the specified configuration.
 
-**Config Object Structure:**
+| Name   | Type   | Default | Description                  |
+|--------|--------|---------|------------------------------|
+| name   | string | -       | Unique name for the tilemap  |
+| config | Object | -       | Tilemap configuration object |
+
+**Usage Example:**
+
 ```javascript
-{
-  layers: {
-    "layerName": [
-      "ABC",     // String format (each character is a tile symbol)
-      "DEF",
-      "GHI"
-    ],
-    "anotherLayer": [
-      ['A', 'B', 'C'],  // Array format
-      ['D', 'E', 'F'],
-      ['G', 'H', 'I']
-    ]
-  },
-  tiles: {
-    "A": "assetId.tileName",  // Simple tile definition
-    "B": {                    // Advanced tile definition
-      tile: "assetId.tileName",
-      collision: {
-        type: "solid",        // "solid", "platform", "trigger"
-        bounds: [0, 0, 32, 32], // [x, y, width, height]
-        onCollide: function(data) {
-          // Collision callback
-          // data: { entity, tile, position, layer, collisionType, side, amount }
-        },
-        onCollisionEnd: function(data) {
-          // Collision end callback
-          // data: { entity, tile, position, layer }
+game.tileMap.create('level1', {
+    tiles: {
+        '#': 'tileset.wall',
+        'P': {
+            tile: 'tileset.platform',
+            collision: {type: 'platform', side: 'top'}
         }
-      }
     },
-    "C": {                    // Animated tile
-      tile: "assetId.tileName",
-      frames: ["asset.frame1", "asset.frame2", "asset.frame3"],
-      frameRate: 8,           // frames per second
-      loop: true              // whether to loop animation
+    layers: {
+        main: [
+            '#####',
+            '#   #',
+            '# P #',
+            '#####'
+        ]
     },
-    "D": {                    // Composite tile with parts
-      tile: "assetId.baseTile",
-      parts: [
-        {
-          tile: "assetId.partTile",
-          offsetX: 1,         // offset in tile units
-          offsetY: 0,
-          collision: {        // each part can have its own collision
-            type: "trigger",
-            bounds: [8, 8, 16, 16]
-          }
-        }
-      ]
-    }
-  }
-}
-```
-
-**Usage Example:**
-```javascript
-const mapConfig = {
-  layers: {
-    background: [
-      "GGGG",
-      "GGGG",
-      "SSSS"
-    ],
-    foreground: [
-      "    ",
-      " PB ",
-      "    "
-    ]
-  },
-  tiles: {
-    "G": "terrain.grass",
-    "S": {
-      tile: "terrain.stone",
-      collision: {
-        type: "solid",
-        bounds: [0, 0, 32, 32]
-      }
-    },
-    "P": {
-      tile: "objects.platform",
-      collision: {
-        type: "platform",
-        bounds: [0, 0, 32, 8]
-      }
-    },
-    "B": {
-      tile: "effects.fire1",
-      frames: ["effects.fire1", "effects.fire2", "effects.fire3"],
-      frameRate: 6,
-      loop: true
-    }
-  }
-};
-
-const result = game.tileMap.create(mapConfig);
-```
-
-### update(): void
-Updates the tilemap system including collision detection for all entities and tile animations.
-
-> [!NOTE]
-> This method is automatically called in the Pixalo class. You don't need to call this method unless you want to do customization elsewhere.
-
-**Usage Example:**
-```javascript
-// Called automatically by the engine, but can be called manually
-game.tileMap.update();
-```
-
-### render(tilemap): void
-Renders all visible tiles from all layers to the canvas with camera culling and pixel-perfect rendering.
-
-> [!NOTE]
-> This method is automatically called in the Pixalo class. You don't need to call this method unless you want to do customization elsewhere.
-
-| Name | Type | Default |
-|------|------|---------|
-| tilemap | Object | - |
-
-**Usage Example:**
-```javascript
-// Usually called automatically by the engine
-const tilemap = game.tileMap.create(config);
-game.tileMap.render(tilemap);
-```
-
-### addTile(layer, symbol, x, y): TileMap
-Adds a single tile to the specified layer at the given coordinates.
-
-| Name | Type | Default |
-|------|------|---------|
-| layer | string | - |
-| symbol | string | - |
-| x | number | 0 |
-| y | number | 0 |
-
-**Usage Example:**
-```javascript
-game.tileMap.addTile("foreground", "G", 5, 3);
-game.tileMap.addTile("background", "S", 2, 4);
-```
-
-### getTilesAt(x, y): Array
-Returns an array of all tiles at the specified world coordinates from all layers.
-
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | - |
-
-**Usage Example:**
-```javascript
-const tiles = game.tileMap.getTilesAt(64, 96);
-tiles.forEach(tile => {
-  console.log(`Found tile: ${tile.symbol} on layer: ${tile.layer}`);
+    tileBaseSize: 32
 });
 ```
 
-### getTileAt(x, y, layer): Object|null
-Returns a single tile at the specified world coordinates. If layer is specified, searches only that layer; otherwise returns the first tile found.
+### `render(tileMap): void`
 
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | - |
-| layer | string | null |
+Activates and renders the specified tilemap.
+
+| Name    | Type   | Default | Description               |
+|---------|--------|---------|---------------------------|
+| tileMap | string | -       | Name of tilemap to render |
 
 **Usage Example:**
-```javascript
-const tile = game.tileMap.getTileAt(64, 96, "foreground");
-if (tile) {
-  console.log(`Tile: ${tile.symbol} at (${tile.x}, ${tile.y})`);
-}
 
-// Get from any layer
-const anyTile = game.tileMap.getTileAt(64, 96);
+```javascript
+game.tileMap.render('level1');
 ```
 
-### getTileInfo(tileReference): Object|null
-Parses a tile reference string and returns asset ID and tile name information.
+### `update(): void`
 
-| Name | Type | Default |
-|------|------|---------|
-| tileReference | string | - |
+Updates tile animations and collision detection. Called automatically by the game loop.
+
+> [!NOTE]
+> This method is automatically called in the Pixalo class. Manual calls are only needed for custom update loops.
+
+### `addTile(layer, symbol, x, y): TileMap`
+
+Adds a single tile to the specified layer at the given coordinates.
+
+| Name   | Type   | Default | Description             |
+|--------|--------|---------|-------------------------|
+| layer  | string | -       | Target layer name       |
+| symbol | string | -       | Tile symbol from config |
+| x      | number | 0       | Tile X coordinate       |
+| y      | number | 0       | Tile Y coordinate       |
 
 **Usage Example:**
+
 ```javascript
-const info = game.tileMap.getTileInfo("terrain.grass");
-// Returns: { assetId: "terrain", tileName: "grass" }
+game.tileMap.addTile('main', '#', 5, 3);
+game.tileMap.addTile('foreground', 'P', 10, 8);
 ```
 
-### getTileSize(tileReference): number
-Returns the size of a tile. If no reference is provided or tile is not found, returns the default tile size.
+### `removeTile(layer, x, y): TileMap`
 
-| Name | Type | Default |
-|------|------|---------|
-| tileReference | string | - |
+Removes a tile from the specified layer at the given coordinates.
+
+| Name  | Type   | Default | Description       |
+|-------|--------|---------|-------------------|
+| layer | string | -       | Target layer name |
+| x     | number | -       | Tile X coordinate |
+| y     | number | -       | Tile Y coordinate |
 
 **Usage Example:**
+
 ```javascript
-const size = game.tileMap.getTileSize("terrain.grass");
-console.log(`Tile size: ${size}px`);
+game.tileMap.removeTile('main', 5, 3);
 ```
 
-### getCurrentTileFrame(symbol): string|null
-Returns the current frame reference for an animated tile.
+### `moveTile(oldLayer, oldX, oldY, newLayer, newX, newY): TileMap`
 
-| Name | Type | Default |
-|------|------|---------|
-| symbol | string | - |
+Moves a tile from one position to another, optionally changing layers.
+
+| Name     | Type   | Default | Description              |
+|----------|--------|---------|--------------------------|
+| oldLayer | string | -       | Source layer name        |
+| oldX     | number | -       | Source X coordinate      |
+| oldY     | number | -       | Source Y coordinate      |
+| newLayer | string | -       | Destination layer name   |
+| newX     | number | -       | Destination X coordinate |
+| newY     | number | -       | Destination Y coordinate |
 
 **Usage Example:**
+
 ```javascript
-const currentFrame = game.tileMap.getCurrentTileFrame("B");
-if (currentFrame) {
-  console.log(`Current animation frame: ${currentFrame}`);
-}
+game.tileMap.moveTile('background', 2, 3, 'foreground', 4, 5);
 ```
 
-### fillBoxWith(symbol): Array
-Creates a grid filled with the specified symbol that covers the entire canvas area.
+### `getTileInfo(symbol): Array`
 
-| Name | Type | Default |
-|------|------|---------|
-| symbol | string | - |
+Returns information about all tiles with the specified symbol.
+
+| Name   | Type   | Default | Description         |
+|--------|--------|---------|---------------------|
+| symbol | string | -       | Tile symbol to find |
 
 **Usage Example:**
+
 ```javascript
-const grassBackground = game.tileMap.fillBoxWith("G");
-// Use this grid in layer configuration
+const platforms = game.tileMap.getTileInfo('P');
+console.log(`Found ${platforms.length} platforms`);
 ```
 
-### fillWith(symbol, count): Array
-Creates an array filled with the specified symbol for the given count.
+### `getTilesAt(x, y): Array`
 
-| Name | Type | Default |
-|------|------|---------|
-| symbol | string | - |
-| count | number | - |
+Returns all tiles at the specified world coordinates.
+
+| Name | Type   | Default | Description        |
+|------|--------|---------|--------------------|
+| x    | number | -       | World X coordinate |
+| y    | number | -       | World Y coordinate |
 
 **Usage Example:**
+
 ```javascript
-const grassRow = game.tileMap.fillWith("G", 10);
-// Returns: ["G", "G", "G", "G", "G", "G", "G", "G", "G", "G"]
+const tilesUnderPlayer = game.tileMap.getTilesAt(player.x, player.y);
 ```
 
-### exportLayers(layer): string
-Exports layer data as a JSON string. If layer parameter is provided, exports only that layer; otherwise exports all layers.
+### `findTilesIn(worldX, worldY): Array`
 
-| Name | Type | Default |
-|------|------|---------|
-| layer | string | undefined |
+Finds all tiles that contain the specified world point, including composite tiles.
+
+| Name   | Type   | Default | Description        |
+|--------|--------|---------|--------------------|
+| worldX | number | -       | World X coordinate |
+| worldY | number | -       | World Y coordinate |
 
 **Usage Example:**
-```javascript
-// Export all layers
-const allLayers = game.tileMap.exportLayers();
-console.log(allLayers);
 
-// Export specific layer
-const backgroundLayer = game.tileMap.exportLayers("background");
-console.log(backgroundLayer);
+```javascript
+const tilesAtPoint = game.tileMap.findTilesIn(mouseX, mouseY);
+```
+
+### `findTileByEntityId(entityId): Object|null`
+
+Finds tile data by its physics entity ID.
+
+| Name     | Type   | Default | Description       |
+|----------|--------|---------|-------------------|
+| entityId | string | -       | Physics entity ID |
+
+**Usage Example:**
+
+```javascript
+const tileData = game.tileMap.findTileByEntityId('tile_5_3_main');
+```
+
+## Coordinate System Methods
+
+### `tileToWorld(tileX, tileY, mapName): Object`
+
+Converts tile coordinates to world coordinates.
+
+| Name    | Type   | Default   | Description       |
+|---------|--------|-----------|-------------------|
+| tileX   | number | -         | Tile X coordinate |
+| tileY   | number | -         | Tile Y coordinate |
+| mapName | string | activeMap | Target map name   |
+
+**Usage Example:**
+
+```javascript
+const worldPos = game.tileMap.tileToWorld(5, 3);
+console.log(`World position: ${worldPos.x}, ${worldPos.y}`);
+```
+
+### `worldToTile(worldX, worldY, mapName): Object`
+
+Converts world coordinates to tile coordinates.
+
+| Name    | Type   | Default   | Description        |
+|---------|--------|-----------|--------------------|
+| worldX  | number | -         | World X coordinate |
+| worldY  | number | -         | World Y coordinate |
+| mapName | string | activeMap | Target map name    |
+
+**Usage Example:**
+
+```javascript
+const tilePos = game.tileMap.worldToTile(player.x, player.y);
+console.log(`Player is on tile: ${tilePos.x}, ${tilePos.y}`);
+```
+
+## Layer Management
+
+### `normalizeLayer(layer): Array`
+
+Converts layer data to normalized format (array of arrays).
+
+| Name  | Type  | Default | Description    |
+|-------|-------|---------|----------------|
+| layer | Array | -       | Raw layer data |
+
+**Usage Example:**
+
+```javascript
+const normalized = game.tileMap.normalizeLayer([
+    '####',
+    '#  #',
+    '####'
+]);
+```
+
+### `exportLayers(layer): string`
+
+Exports layer data as JSON string for saving/loading.
+
+| Name  | Type   | Default | Description                   |
+|-------|--------|---------|-------------------------------|
+| layer | string | -       | Layer name (optional for all) |
+
+**Usage Example:**
+
+```javascript
+const mapData = game.tileMap.exportLayers();
+const backgroundData = game.tileMap.exportLayers('background');
+```
+
+## Utility Methods
+
+### `fillBoxWith(symbol): Array`
+
+Creates a rectangular grid filled with the specified symbol.
+
+| Name   | Type   | Default | Description    |
+|--------|--------|---------|----------------|
+| symbol | string | -       | Symbol to fill |
+
+**Usage Example:**
+
+```javascript
+const wallGrid = game.tileMap.fillBoxWith('#');
+```
+
+### `fillWith(symbol, count): Array`
+
+Creates an array filled with the specified symbol.
+
+| Name   | Type   | Default | Description        |
+|--------|--------|---------|--------------------|
+| symbol | string | -       | Symbol to fill     |
+| count  | number | -       | Number of elements |
+
+**Usage Example:**
+
+```javascript
+const wallRow = game.tileMap.fillWith('#', 10);
+```
+
+### `getTileSize(tileReference): number`
+
+Gets the size of a specific tile or the base tile size.
+
+| Name          | Type   | Default | Description           |
+|---------------|--------|---------|-----------------------|
+| tileReference | string | -       | Tile reference string |
+
+**Usage Example:**
+
+```javascript
+const size = game.tileMap.getTileSize('tileset.wall');
+```
+
+### `getTileBaseSize(mapName): number`
+
+Gets the base tile size for the specified map.
+
+| Name    | Type   | Default   | Description |
+|---------|--------|-----------|-------------|
+| mapName | string | activeMap | Map name    |
+
+**Usage Example:**
+
+```javascript
+const baseSize = game.tileMap.getTileBaseSize('level1');
 ```
 
 ## Animation System
 
-Animated tiles support:
-- Multiple animation frames
-- Configurable frame rate (frames per second)
-- Loop control (infinite or play-once)
-- Automatic frame progression during updates
+### `getCurrentTileFrame(symbol, tileX, tileY, layer): string|null`
 
-## Layer Management
+Gets the current animation frame for a tile.
 
-- Multiple layers with independent tile grids
-- String or array format support for layer definition
-- Dynamic layer creation when adding tiles
-- Layer-specific tile queries and operations
+| Name   | Type   | Default | Description       |
+|--------|--------|---------|-------------------|
+| symbol | string | -       | Tile symbol       |
+| tileX  | number | null    | Tile X coordinate |
+| tileY  | number | null    | Tile Y coordinate |
+| layer  | string | null    | Layer name        |
+
+**Usage Example:**
+
+```javascript
+const currentFrame = game.tileMap.getCurrentTileFrame('water', 5, 3, 'main');
+```
+
+### `playTileAnimation(symbol, tileX, tileY, layer): TileMap`
+
+Starts animation for the specified tile(s).
+
+| Name   | Type   | Default | Description       |
+|--------|--------|---------|-------------------|
+| symbol | string | -       | Tile symbol       |
+| tileX  | number | null    | Tile X coordinate |
+| tileY  | number | null    | Tile Y coordinate |
+| layer  | string | null    | Layer name        |
+
+**Usage Example:**
+
+```javascript
+// Play all water tile animations
+game.tileMap.playTileAnimation('water');
+
+// Play specific tile animation
+game.tileMap.playTileAnimation('water', 5, 3, 'main');
+```
+
+### `pauseTileAnimation(symbol, tileX, tileY, layer): TileMap`
+
+Pauses animation for the specified tile(s).
+
+| Name   | Type   | Default | Description       |
+|--------|--------|---------|-------------------|
+| symbol | string | -       | Tile symbol       |
+| tileX  | number | null    | Tile X coordinate |
+| tileY  | number | null    | Tile Y coordinate |
+| layer  | string | null    | Layer name        |
+
+**Usage Example:**
+
+```javascript
+game.tileMap.pauseTileAnimation('fire');
+```
+
+### `stopTileAnimation(symbol, tileX, tileY, layer): TileMap`
+
+Stops animation and resets to first frame.
+
+| Name   | Type   | Default | Description       |
+|--------|--------|---------|-------------------|
+| symbol | string | -       | Tile symbol       |
+| tileX  | number | null    | Tile X coordinate |
+| tileY  | number | null    | Tile Y coordinate |
+| layer  | string | null    | Layer name        |
+
+**Usage Example:**
+
+```javascript
+game.tileMap.stopTileAnimation('explosion');
+```
+
+### `setTileAnimationFrame(symbol, frame, tileX, tileY, layer): TileMap`
+
+Sets the current animation frame.
+
+| Name   | Type   | Default | Description       |
+|--------|--------|---------|-------------------|
+| symbol | string | -       | Tile symbol       |
+| frame  | number | -       | Frame index       |
+| tileX  | number | null    | Tile X coordinate |
+| tileY  | number | null    | Tile Y coordinate |
+| layer  | string | null    | Layer name        |
+
+**Usage Example:**
+
+```javascript
+game.tileMap.setTileAnimationFrame('door', 3);
+```
+
+### `setTileAnimationSpeed(symbol, frameRate, tileX, tileY, layer): TileMap`
+
+Changes the animation frame rate.
+
+| Name      | Type   | Default | Description       |
+|-----------|--------|---------|-------------------|
+| symbol    | string | -       | Tile symbol       |
+| frameRate | number | -       | Frames per second |
+| tileX     | number | null    | Tile X coordinate |
+| tileY     | number | null    | Tile Y coordinate |
+| layer     | string | null    | Layer name        |
+
+**Usage Example:**
+
+```javascript
+game.tileMap.setTileAnimationSpeed('water', 12);
+```
+
+## Debug Methods
+
+### `enableTileDebug(): TileMap`
+
+Enables visual debugging for all tiles with collision.
+
+**Usage Example:**
+
+```javascript
+game.tileMap.enableTileDebug();
+```
+
+### `disableTileDebug(): TileMap`
+
+Disables tile debugging visualization.
+
+**Usage Example:**
+
+```javascript
+game.tileMap.disableTileDebug();
+```
+
+## Cleanup Methods
+
+### `clear(): void`
+
+Clears the current tilemap state without removing configurations.
+
+**Usage Example:**
+
+```javascript
+game.tileMap.clear();
+```
+
+### `reset(): void`
+
+Completely resets the tilemap system, removing all maps and state.
+
+**Usage Example:**
+
+```javascript
+game.tileMap.reset();
+```
+
+### `destroy(): void`
+
+Destroys the tilemap instance and removes all event listeners.
+
+**Usage Example:**
+
+```javascript
+game.tileMap.destroy();
+```
+
+## Collision Types
+
+### Solid Collision
+
+Creates impassable barriers that stop entity movement.
+
+```javascript
+tiles: {
+    '#': {
+        tile: 'tileset.wall',
+        collision: {
+            type: 'solid',
+            bounds: [0, 0, 32, 32]
+        }
+    }
+}
+```
+
+### Platform Collision
+
+Creates one-way platforms that entities can jump through from below.
+
+```javascript
+tiles: {
+    'P': {
+        tile: 'tileset.platform',
+        collision: {
+            type: 'platform',
+            side: 'top',           // Which side is solid
+            bounds: [0, 0, 32, 16] // Usually shorter height
+        }
+    }
+}
+```
+
+### Sensor Collision
+
+Creates trigger areas that detect entity presence without blocking movement.
+
+```javascript
+tiles: {
+    'T': {
+        tile: 'tileset.trigger',
+        collision: {
+            type: 'sensor',
+            onCollide: (data) => {
+                console.log('Entity entered trigger zone!');
+            },
+            onCollisionEnd: (data) => {
+                console.log('Entity left trigger zone!');
+            }
+        }
+    }
+}
+```
+
+## Advanced Features
+
+### Composite Tiles
+
+Create complex tiles with multiple visual parts.
+
+```javascript
+tiles: {
+    'D': {
+        tile: 'tileset.door_base',
+        collision: {
+            type: 'solid', 
+            bounds: [0, 16, 32, 16] // Only bottom half has collision
+        },
+        parts: [
+            {
+                tile: 'tileset.door_top',
+                offsetX: 0,
+                offsetY: -1  // Render one tile above
+            },
+            {
+                tile: 'tileset.door_decoration',
+                offsetX: 0.5,
+                offsetY: -0.5
+            }
+        ]
+    }
+}
+```
+
+### Animated Tiles
+
+Create tiles with frame-based animations.
+
+```javascript
+tiles: {
+    'W': {
+        tile: 'water.frame1',
+        frames: [
+            'water.frame1',
+            'water.frame2',
+            'water.frame3',
+            'water.frame4'
+        ],
+        frameRate: 6,           // 6 FPS
+        loop: true,
+        playing: true,
+        collision: {
+            type: 'sensor'      // Water is typically a sensor
+        }
+    }
+}
+```
+
+### Interactive Tiles
+
+Add click and hover functionality to tiles.
+
+```javascript
+tiles: {
+    'C': {
+        tile: 'tileset.chest',
+        onClick: (event) => {
+            console.log(`Clicked chest at (${event.tileX}, ${event.tileY})`);
+            // Open chest logic here
+            event.stopPropagation(); // Prevent event bubbling
+        },
+        onHover: (event) => {
+            console.log('Hovering over chest');
+        },
+        onHoverOut: (event) => {
+            console.log('No longer hovering over chest');
+        }
+    }
+}
+```
+
+### Transformed Tiles
+
+Apply visual transformations to tiles.
+
+```javascript
+tiles: {
+    '/': {
+        tile: 'tileset.slope',
+        rotation: 45,           // Rotate 45 degrees
+        scaleX: -1,            // Flip horizontally
+        scaleY: 1,             // Normal vertical scale
+        skewX: 15,             // Skew effect
+        collision: {
+            type: 'solid',
+            bounds: [0, 16, 32, 16] // Adjust collision for slope
+        }
+    }
+}
+```
 
 ## Events
 
-### Event Flow
+### Tile Events
 
-1. **Collision Detection**: During `update()`, the class checks for collisions between entities and tiles
-2. **Direct Callback Execution**: When collision conditions are met, callbacks are executed immediately
-3. **No Event Queue**: There's no event queuing or asynchronous event handling
-4. **Immediate Response**: All collision responses happen synchronously during the collision check
+Each tile can have individual event handlers:
 
-### Collision Types and Events
+**`onClick(event)`** - Triggered when tile is clicked
 
-#### Solid Collision
-- **onCollide**: Called when entity hits a solid tile
-- **onCollisionEnd**: Called when entity stops touching the solid tile
-- **Behavior**: Entity position is automatically adjusted to prevent overlap
+- `symbol`: Tile symbol
+- `config`: Tile configuration
+- `tileX`: Tile X coordinate
+- `tileY`: Tile Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `layer`: Layer name
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `originalEvent`: Original mouse/touch event
+- `stopPropagation()`: Prevents event from bubbling to other tiles
 
-#### Platform Collision  
-- **onCollide**: Called only when entity approaches from above (`side === "bottom"`)
-- **onCollisionEnd**: Called when entity leaves the platform area
-- **Behavior**: Entity can pass through from below and sides
+**`onRightClick(event)`** - Triggered on right-click
 
-#### Trigger Collision
-- **onCollide**: Called when entity enters trigger area
-- **onCollisionEnd**: Called when entity leaves trigger area  
-- **Behavior**: No position adjustment, only callback execution
+- Same properties as onClick
+
+**`onHover(event)`** - Triggered when mouse enters tile
+
+- Same properties as onClick
+
+**`onHoverOut(event)`** - Triggered when mouse leaves tile
+
+- Same properties as onClick
+
+### Collision Events
+
+Tiles can respond to collision events:
+
+**`onCollide(data)`** - Triggered when entity collides with tile
+
+- `entity`: The colliding entity
+- `tile`: Tile configuration
+- `position`: Collision position `{x, y}`
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `layer`: Layer name
+- `side`: Collision side ('top', 'bottom', 'left', 'right')
+- `amount`: Collision overlap amount
+
+**`onCollisionEnd(data)`** - Triggered when collision ends
+
+- Same properties as onCollide
+
+## Physics Integration
+
+When Physics is enabled, tiles automatically become physics bodies:
+
+```javascript
+tiles: {
+    '#': {
+        tile: 'tileset.wall',
+        collision: {
+            type: 'solid',
+            bounds: [0, 0, 32, 32]
+        },
+        physics: {
+            bodyType: 'static',    // Default for tiles
+            friction: 0.8,
+            restitution: 0.2,
+            density: 1.0,
+                
+            // Collision filtering
+            categoryBits: 0x0002,
+            maskBits: 0xFFFF
+        }
+    }
+}
+```
+
+### Physics Events Integration
+
+Physics collision events are automatically mapped to tile events:
+
+```javascript
+// Physics collision automatically triggers tile collision events
+game.on('collisions', (data) => {
+    // Data includes entityA, entityB, contact info, etc.
+    // If one entity is a tile, tile's onCollide is called
+});
+```
+
+## Best Practices
+
+### Performance Optimization
+
+```javascript
+// Use appropriate tile sizes
+const config = {
+    tileBaseSize: 32,        // Good balance of detail and performance
+    overlap: 1               // Minimal overlap for seamless rendering
+};
+
+// Optimize collision bounds
+tiles: {
+    'P': {
+        tile: 'tileset.platform',
+        collision: {
+            bounds: [2, 0, 28, 8]  // Slightly smaller than visual for better gameplay
+        }
+    }
+}
+
+// Use sensors for non-blocking interactions
+tiles: {
+    'powerup': {
+        tile: 'items.coin',
+        collision: {
+            type: 'sensor',        // No physics collision, just detection
+            onCollide: (data) => {
+                // Collect coin logic
+                game.tileMap.removeTile(data.layer, data.tileX, data.tileY);
+            }
+        }
+    }
+}
+```
+
+### Layer Organization
+
+```javascript
+const mapConfig = {
+    layers: {
+        background: backgroundTiles,    // Visual background
+        collision: solidTiles,          // Main collision layer
+        platforms: platformTiles,       // One-way platforms
+        triggers: sensorTiles,          // Invisible triggers
+        foreground: decorationTiles,    // Visual foreground
+        ui: interfaceTiles              // Interface elements
+    }
+};
+```
+
+### Memory Management
+
+```javascript
+// Clear unused maps
+game.tileMap.clear();
+
+// Reset for level changes
+game.tileMap.reset();
+
+// Destroy when done
+game.tileMap.destroy();
+```
+
+### Dynamic Tile Manipulation
+
+```javascript
+// Example: Destructible walls
+tiles: {
+    'B': {
+        tile: 'tileset.breakable_wall',
+        collision: {
+            type: 'solid', 
+            onCollide: (data) => {
+                if (data.entity.type === 'projectile') {
+                    // Remove the wall
+                    game.tileMap.removeTile(data.layer, data.tileX, data.tileY);
+                    // Add debris effect
+                    createDebrisEffect(data.worldX, data.worldY);
+                }
+            }
+        }
+    }
+}
+
+// Example: Moving platforms
+function createMovingPlatform (startX, startY, endX, endY, speed) {
+    let direction = 1;
+    let currentPos = {x: startX, y: startY};
+
+    const update = () => {
+        // Remove old position
+        game.tileMap.removeTile('platforms', currentPos.x, currentPos.y);
+
+        // Calculate new position
+        currentPos.x += (direction * speed);
+        if (currentPos.x >= endX || currentPos.x <= startX) {
+            direction *= -1;
+        }
+
+        // Add at new position
+        game.tileMap.addTile('platforms', 'P', currentPos.x, currentPos.y);
+    };
+
+    game.timer(update, 100);
+}
+```
+
+### Error Handling
+
+```javascript
+// Safe tile operations
+function saflyAddTile (layer, symbol, x, y) {
+    try {
+        game.tileMap.addTile(layer, symbol, x, y);
+    } catch (error) {
+        console.warn(`Failed to add tile: ${error.message}`);
+    }
+}
+```
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### Tiles Not Rendering
+
+```javascript
+// Check if tilemap is active
+if (!game.tileMap.activeMap) {
+    game.tileMap.render('myMap');
+}
+
+// Verify asset references
+const tileInfo = game.tileMap.getAssetTileInfo('tileset.wall');
+if (!tileInfo.exists) {
+    console.error('Tile asset not found');
+}
+```
+
+#### Collision Not Working
+
+```javascript
+// Ensure collision is enabled
+if (!game.engine.collisionEnabled && !game.engine.physicsEnabled) {
+    console.error('Neither collision nor physics is enabled');
+}
+
+// Check tile collision configuration
+const tileData = game.tileMap.getTileInfo('#')[0];
+if (!tileData.config.collision) {
+    console.error('Tile has no collision configuration');
+}
+```
+
+#### Animation Issues
+
+```javascript
+// Check animation data
+const animData = game.tileMap.animatedTiles.get('tile_water');
+if (!animData.playing) {
+    game.tileMap.playTileAnimation('water');
+}
+
+// Verify frame references
+const currentFrame = game.tileMap.getCurrentTileFrame('water');
+if (!currentFrame) {
+    console.error('Animation frame not found');
+}
+```

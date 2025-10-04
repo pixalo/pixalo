@@ -1,0 +1,2 @@
+https://craftpix.net/file-licenses:
+    - swamp-pixel-art.png
