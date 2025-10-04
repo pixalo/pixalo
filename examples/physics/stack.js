@@ -46,8 +46,8 @@ game.on('click', ({ worldX, worldY }) => {
         shape: 'circle',
         x: worldX,
         y: worldY,
-        width: 15,
-        height: 15,
+        width: 25,
+        height: 25,
         backgroundColor: '#F3A71B',
         physics: { density: 3 }
     });

@@ -21,7 +21,6 @@ class Debugger {
 
         this.lastFpsUpdate = performance.now();
         this.frameCount = 0;
-        this.targetFrameCount = 0;
 
         this.items = new Map();
 

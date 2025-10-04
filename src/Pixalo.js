@@ -739,18 +739,7 @@ class Pixalo extends Utils {
         this.lastTime = 0;
 
         // Reset debugger
-        this.debugger = {
-            active: false,
-            level: 'advanced',
-            fps: {
-                target: this.config.fps,
-                actual: this.config.fps,
-                ratio: 100
-            },
-            lastFpsUpdate: performance.now(),
-            frameCount: 0,
-            targetFrameCount: 0
-        };
+        this.debugger.clearItems();
 
         // Reset canvas and context
         this.clear();

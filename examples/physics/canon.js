@@ -30,14 +30,16 @@ game.append('base', {
     x: 120, y: game.baseHeight - 100,
     width: 100, height: 60,
     backgroundColor: '#F3A71A',
+    borderRadius: 6,
     physics: {bodyType: 'static'}
 });
 
 // rotating barrel
 const barrel = game.append('barrel', {
-    x: 120, y: game.baseHeight - 120,
-    width: 140, height: 20,
+    x: 150, y: game.baseHeight - 110,
+    width: 100, height: 20,
     backgroundColor: '#268985',
+    borderRadius: 6,
     physics: { bodyType: 'kinematic' }
 });
 
@@ -93,6 +95,7 @@ for (let i = 0; i < 6; i++) {
         y: game.baseHeight - 60,
         width: 50, height: 50,
         backgroundColor: '#268985',
+        borderRadius: 6,
         physics: {density: 0.5, friction: 0.3, restitution: 0.1}
     });
 }
