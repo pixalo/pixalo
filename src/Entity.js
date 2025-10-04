@@ -1681,6 +1681,9 @@ class Entity {
     /** ======== END ======== */
 
     kill () {
+        Promise.resolve().then(() => this._destroy());
+    }
+    _destroy () {
         if (!this.engine) return false;
 
         if (this.engine.physics && this.physics)
