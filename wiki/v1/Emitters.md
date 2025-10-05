@@ -369,7 +369,7 @@ emitter.destroy();
 - Alpha values are interpolated linearly from start to end values
 
 ### Movement Animation
-- The `moveTo` method supports easing functions from the engine's [Ease](https://github.com/pixalo/pixalo/wiki/Ease) module
+- The `moveTo` method supports easing functions from the engine's [Ease](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Ease.md) module
 - Movement animations can be interrupted by calling `move()` or another `moveTo()`
 - Available easing options depend on the engine's implementation
 

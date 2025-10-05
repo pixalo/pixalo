@@ -6,8 +6,8 @@ Pixalo game engine to provide realistic physics behavior for game entities.
 
 > [!WARNING]
 > When Physics is enabled, you cannot use the features of
-> the [Collision class](https://github.com/pixalo/pixalo/wiki/Collision), and
-> all [Collision class](https://github.com/pixalo/pixalo/wiki/Collision) commands in the Pixalo engine are disabled. This
+> the [Collision class](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Collision.md), and
+> all [Collision class](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Collision.md) commands in the Pixalo engine are disabled. This
 > is because the Physics class exclusively handles all collision calculations and sends the results to you.
 
 ## Configuration Object
