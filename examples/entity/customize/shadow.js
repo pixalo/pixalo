@@ -21,6 +21,7 @@ game.append('shadow', {
     height: 200,
     x: (game.baseWidth  - 200) / 2,
     y: (game.baseHeight - 200) / 2,
+    fill: '#268985',
 
     shadowColor: 'rgba(0, 0, 0, 0.2)',
     shadowBlur: 6,

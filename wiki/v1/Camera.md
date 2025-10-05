@@ -897,7 +897,7 @@ function updateCameraBounds () {
 ## Easing Functions
 
 The camera system supports all easing functions provided by
-the [Pixalo.Ease](https://github.com/pixalo/pixalo/wiki/Ease) system:
+the [Pixalo.Ease](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Ease.md) system:
 
 - `'easeInOutCubic'` (default)
 
