@@ -152,6 +152,8 @@ class Pixalo extends Utils {
         this.draggedEntity   = null;
         this.draggedEntities = new Map();
         this.hoveredEntity   = null;
+        this.mouseDownEntity = null;
+        this.touchStartEntities = new Map();
         this._setupEventListeners();
 
         this.trigger('ready');

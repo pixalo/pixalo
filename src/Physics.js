@@ -817,8 +817,12 @@ class Physics {
         const CLICK_TIME_THRESHOLD = 200;
         const MOUSE_IDENTIFIER = 'mouse';
 
+        // Track entities that received start events
+        this.mouseDownEntity = null;
+        this.touchStartEntities = new Map();
+
         // Helper function to create event data
-        const createEventData = (screenX, screenY, worldPos, identifier = null, target = null) => {
+        const createEventData = (screenX, screenY, worldPos, identifier = null, target = null, which = null) => {
             const data = {
                 x: worldPos.x,
                 y: worldPos.y,
@@ -831,6 +835,7 @@ class Physics {
 
             if (identifier !== null) data.identifier = identifier;
             if (target !== null) data.target = target;
+            if (which !== null) data.which = which;
 
             return data;
         };
@@ -847,9 +852,18 @@ class Physics {
             const entities = Array.from(this.bodies.entries());
             for (const [entityId, body] of entities) {
                 const entity = body.GetUserData();
-                if (entity && entity.events.draggable && this._isPointInEntity(x, y, entity)) {
-                    this._startDrag(entity, worldPos.x, worldPos.y, MOUSE_IDENTIFIER);
-                    entity.trigger('drag', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, entity));
+                if (entity && this._isPointInEntity(x, y, entity)) {
+                    // Interactive events
+                    if (entity.isInteractive && entity.isInteractive()) {
+                        entity.trigger('mousedown', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, entity, e.which));
+                        this.mouseDownEntity = entity;
+                    }
+
+                    // Drag events
+                    if (entity.events.draggable) {
+                        this._startDrag(entity, worldPos.x, worldPos.y, MOUSE_IDENTIFIER);
+                        entity.trigger('drag', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, entity));
+                    }
                     break;
                 }
             }
@@ -861,6 +875,21 @@ class Physics {
             const x = e.screenX - rect.left;
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
+
+            // Interactive mousemove for tracked entity
+            if (this.mouseDownEntity && this.mouseDownEntity.isInteractive && this.mouseDownEntity.isInteractive()) {
+                this.mouseDownEntity.trigger('mousemove', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, this.mouseDownEntity, e.which));
+            } else {
+                // Interactive mousemove for current entity under cursor
+                const entities = Array.from(this.bodies.entries());
+                for (const [entityId, body] of entities) {
+                    const entity = body.GetUserData();
+                    if (entity && entity.isInteractive && entity.isInteractive() && this._isPointInEntity(x, y, entity)) {
+                        entity.trigger('mousemove', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, entity, e.which));
+                        break;
+                    }
+                }
+            }
 
             // Hover handling
             let foundEntity = null;
@@ -888,7 +917,7 @@ class Physics {
                 const dragBodyData = this.draggedBodies.get(MOUSE_IDENTIFIER);
                 if (dragBodyData && dragBodyData.entity && dragBodyData.entity.events.draggable) {
                     this._updateDrag(worldPos.x, worldPos.y, MOUSE_IDENTIFIER);
-                    dragBodyData.entity.trigger('dragMove', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, dragBodyData.entity));
+                    dragBodyData.entity.trigger('dragMove', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, dragBodyData.entity, e.which));
                 }
             }
         });
@@ -900,12 +929,43 @@ class Physics {
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
 
+            // Interactive mouseup for tracked entity
+            if (this.mouseDownEntity && this.mouseDownEntity.isInteractive && this.mouseDownEntity.isInteractive()) {
+                this.mouseDownEntity.trigger('mouseup', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, this.mouseDownEntity, e.which));
+                this.mouseDownEntity = null;
+            }
+
+            // Drag handling
             if (this.mouseJoints.has(MOUSE_IDENTIFIER)) {
                 const dragBodyData = this.draggedBodies.get(MOUSE_IDENTIFIER);
                 if (dragBodyData && dragBodyData.entity) {
-                    dragBodyData.entity.trigger('drop', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, dragBodyData.entity));
+                    dragBodyData.entity.trigger('drop', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, dragBodyData.entity, e.which));
                 }
                 this._endDrag(MOUSE_IDENTIFIER);
+            }
+        });
+
+        // Mouse wheel events
+        this.engine.on('wheel', (e) => {
+            if (!this.engine.running) return;
+
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.screenX - rect.left;
+            const y = e.screenY - rect.top;
+            const worldPos = {x: e.worldX, y: e.worldY};
+
+            const entities = Array.from(this.bodies.entries());
+            for (const [entityId, body] of entities) {
+                const entity = body.GetUserData();
+                if (entity && entity.isInteractive && entity.isInteractive() && this._isPointInEntity(x, y, entity)) {
+                    const eventData = createEventData(x, y, worldPos, null, entity);
+                    eventData.deltaX = e.deltaX;
+                    eventData.deltaY = e.deltaY;
+                    eventData.deltaZ = e.deltaZ;
+                    eventData.deltaMode = e.deltaMode;
+                    entity.trigger('wheel', eventData);
+                    break;
+                }
             }
         });
 
@@ -927,9 +987,18 @@ class Physics {
 
             for (const [entityId, body] of entities) {
                 const entity = body.GetUserData();
-                if (entity && entity.events.draggable && this._isPointInEntity(x, y, entity)) {
-                    this._startDrag(entity, worldPos.x, worldPos.y, e.identifier);
-                    entity.trigger('drag', createEventData(x, y, worldPos, e.identifier, entity));
+                if (entity && this._isPointInEntity(x, y, entity)) {
+                    // Interactive events
+                    if (entity.isInteractive && entity.isInteractive()) {
+                        entity.trigger('touchstart', createEventData(x, y, worldPos, e.identifier, entity));
+                        this.touchStartEntities.set(e.identifier, entity);
+                    }
+
+                    // Drag events
+                    if (entity.events.draggable) {
+                        this._startDrag(entity, worldPos.x, worldPos.y, e.identifier);
+                        entity.trigger('drag', createEventData(x, y, worldPos, e.identifier, entity));
+                    }
                     break;
                 }
             }
@@ -942,6 +1011,23 @@ class Physics {
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
 
+            // Interactive touchmove for tracked entity
+            const touchStartEntity = this.touchStartEntities.get(e.identifier);
+            if (touchStartEntity && touchStartEntity.isInteractive && touchStartEntity.isInteractive()) {
+                touchStartEntity.trigger('touchmove', createEventData(x, y, worldPos, e.identifier, touchStartEntity));
+            } else {
+                // Interactive touchmove for current entity under touch
+                const entities = Array.from(this.bodies.entries());
+                for (const [entityId, body] of entities) {
+                    const entity = body.GetUserData();
+                    if (entity && entity.isInteractive && entity.isInteractive() && this._isPointInEntity(x, y, entity)) {
+                        entity.trigger('touchmove', createEventData(x, y, worldPos, e.identifier, entity));
+                        break;
+                    }
+                }
+            }
+
+            // Drag handling
             if (this.mouseJoints.has(e.identifier)) {
                 const dragBodyData = this.draggedBodies.get(e.identifier);
                 if (dragBodyData && dragBodyData.entity) {
@@ -959,11 +1045,19 @@ class Physics {
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
 
+            // Interactive touchend for tracked entity
+            const touchStartEntity = this.touchStartEntities.get(e.identifier);
+            if (touchStartEntity && touchStartEntity.isInteractive && touchStartEntity.isInteractive()) {
+                touchStartEntity.trigger('touchend', createEventData(x, y, worldPos, e.identifier, touchStartEntity));
+                this.touchStartEntities.delete(e.identifier);
+            }
+
             const dx = x - touchStartPosition.x;
             const dy = y - touchStartPosition.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
             const timeDiff = currentTime - touchStartTime;
 
+            // Click detection
             if (distance < CLICK_THRESHOLD && timeDiff < CLICK_TIME_THRESHOLD) {
                 const entities = Array.from(this.bodies.entries());
                 for (const [entityId, body] of entities) {
@@ -975,6 +1069,7 @@ class Physics {
                 }
             }
 
+            // Drag handling
             if (this.mouseJoints.has(e.identifier)) {
                 const dragBodyData = this.draggedBodies.get(e.identifier);
                 if (dragBodyData && dragBodyData.entity) {
@@ -991,12 +1086,58 @@ class Physics {
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
 
+            // Clean up tracked entity
+            if (this.touchStartEntities.has(e.identifier)) {
+                this.touchStartEntities.delete(e.identifier);
+            }
+
+            // Drag handling
             if (this.mouseJoints.has(e.identifier)) {
                 const dragBodyData = this.draggedBodies.get(e.identifier);
                 if (dragBodyData && dragBodyData.entity) {
                     dragBodyData.entity.trigger('drop', createEventData(x, y, worldPos, e.identifier, dragBodyData.entity));
                 }
                 this._endDrag(e.identifier);
+            }
+        });
+
+        // Click events (separate from touch/mouse)
+        this.engine.on('click', (e) => {
+            if (!this.engine.running) return;
+
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.screenX - rect.left;
+            const y = e.screenY - rect.top;
+            const worldPos = {x: e.worldX, y: e.worldY};
+
+            const entities = Array.from(this.bodies.entries());
+            for (const [entityId, body] of entities) {
+                const entity = body.GetUserData();
+                if (entity && this._isPointInEntity(x, y, entity)) {
+                    if (entity.isInteractive && entity.isInteractive()) {
+                        entity.trigger('click', createEventData(x, y, worldPos, null, entity));
+                        break;
+                    }
+                }
+            }
+        });
+        this.engine.on('rightclick', (e) => {
+            if (!this.engine.running) return;
+
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.screenX - rect.left;
+            const y = e.screenY - rect.top;
+            const worldPos = {x: e.worldX, y: e.worldY};
+
+            const entities = Array.from(this.bodies.entries());
+            for (const [entityId, body] of entities) {
+                const entity = body.GetUserData();
+                if (entity && this._isPointInEntity(x, y, entity)) {
+                    if (entity.isInteractive && entity.isInteractive()) {
+                        entity.trigger('rightclick', createEventData(x, y, worldPos, null, entity));
+                        break;
+                    }
+                }
             }
         });
     }
@@ -1147,6 +1288,12 @@ class Physics {
             this.draggedBodies.clear();
             this.bodyTouchMap.clear();
 
+            // Clear interactive tracking
+            this.mouseDownEntity = null;
+            if (this.touchStartEntities) {
+                this.touchStartEntities.clear();
+            }
+
             for (const [entityId, body] of this.bodies) {
                 // Stop moving
                 pixalo.find(entityId).halt();
@@ -1189,6 +1336,10 @@ class Physics {
 
             // Recreate contact listener
             this._setupContactListener();
+
+            // Reset interactive tracking variables
+            this.mouseDownEntity = null;
+            this.touchStartEntities = new Map();
 
             // Trigger reset event
             if (this.engine && typeof this.engine.trigger === 'function') {

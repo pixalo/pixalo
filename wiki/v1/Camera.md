@@ -1,5 +1,3 @@
-# Camera Class Documentation
-
 The Camera class is a comprehensive 2D camera system for the Pixalo game engine that provides advanced viewport
 management, smooth animations, and cinematic effects. It handles camera movement, zooming, rotation, entity following,
 bounds management, and screen-shake effects.
@@ -25,10 +23,10 @@ const game = new Pixalo('#game', {
         maxZoom: 5,            // Maximum allowed zoom level
         smoothing: true,       // Enable smooth camera movement interpolation
         smoothSpeed: 0.1,      // Speed of smooth interpolation (0-1, where 1 = instant)
-        rotation: 0            // Initial rotation angle in degrees
+        rotation: 0,           // Initial rotation angle in degrees
+        viewPadding: 100       // Default padding for inView() method - extends visibility area beyond camera bounds
     }
 });
-
 ```
 
 ## Movement Methods
@@ -491,10 +489,10 @@ const bottomRight = game.camera.calcFixedPosition(-100, -50);
 
 Checks if an object is visible within the camera's viewport.
 
-| Name    | Type   | Default |
-|---------|--------|---------|
-| object  | object | -       |
-| padding | number | 0       |
+| Name    | Type   | Default              |
+|---------|--------|----------------------|
+| object  | object | -                    |
+| padding | number | `config.viewPadding` |
 
 **Usage Example:**
 
@@ -514,11 +512,11 @@ if (game.camera.inView(entity, 100)) {
 
 Checks if a specific point is visible within the camera's viewport.
 
-| Name    | Type   | Default |
-|---------|--------|---------|
-| x       | number | -       |
-| y       | number | -       |
-| padding | number | 0       |
+| Name    | Type   | Default              |
+|---------|--------|----------------------|
+| x       | number | -                    |
+| y       | number | -                    |
+| padding | number | `config.viewPadding` |
 
 **Usage Example:**
 

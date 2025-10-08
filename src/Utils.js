@@ -159,11 +159,16 @@ class Utils {
 
             const sortedEntities = this.getSortedEntitiesForInteraction();
             const targetEntity = sortedEntities.find(entity =>
-                this.isPointInEntity(worldCoords.x, worldCoords.y, entity) &&
-                (entity.isDraggable() || entity.isClickable())
+                (entity.isDraggable() || entity.isClickable() || entity.isInteractive()) &&
+                this.isPointInEntity(worldCoords.x, worldCoords.y, entity)
             );
 
             if (targetEntity) {
+                if (targetEntity.isInteractive()) {
+                    targetEntity.trigger('touchstart', eventData);
+                    this.touchStartEntities.set(identifier, targetEntity);
+                }
+
                 this.entities.forEach(entity => {
                     if (entity.zIndex > targetEntity.zIndex) {
                         entity.zIndex--;
@@ -212,7 +217,24 @@ class Utils {
 
             this.trigger('touchmove', eventData);
 
-            if (this.physicsEnabled || !draggedData) continue;
+            if (this.physicsEnabled) continue;
+
+            const touchStartEntity = this.touchStartEntities.get(identifier);
+            if (touchStartEntity && touchStartEntity.isInteractive()) {
+                touchStartEntity.trigger('touchmove', eventData);
+            } else {
+                const sortedEntities = this.getSortedEntitiesForInteraction();
+                const targetEntity = sortedEntities.find(entity =>
+                    entity.isInteractive() && this.isPointInEntity(worldCoords.x, worldCoords.y, entity)
+                );
+
+                if (targetEntity) {
+                    targetEntity.trigger('touchmove', eventData);
+                }
+            }
+
+            // Handle drag logic
+            if (!draggedData) continue;
 
             const entity = draggedData.entity;
             let newX = worldCoords.x - draggedData.dragStartX;
@@ -259,7 +281,18 @@ class Utils {
                 identifier
             };
 
-            if (!this.physicsEnabled && draggedData) {
+            this.trigger('touchend', eventData);
+
+            if (this.physicsEnabled) return;
+
+            const touchStartEntity = this.touchStartEntities.get(identifier);
+            if (touchStartEntity && touchStartEntity.isInteractive()) {
+                touchStartEntity.trigger('touchend', eventData);
+                this.touchStartEntities.delete(identifier);
+            }
+
+            // Handle drag end logic
+            if (draggedData) {
                 const entity = draggedData.entity;
 
                 const deltaX = Math.abs(worldCoords.x - draggedData.touchStartX);
@@ -275,12 +308,23 @@ class Utils {
 
                 this.draggedEntities.delete(identifier);
             }
-
-            this.trigger('touchend', eventData);
         }
     }
     _handleTouchCancel (e) {
-        this.handleTouchEnd(e);
+        if (!this.running) return;
+
+        for (const touch of e.changedTouches) {
+            const identifier = touch.identifier;
+
+            const touchStartEntity = this.touchStartEntities.get(identifier);
+            if (touchStartEntity) {
+                this.touchStartEntities.delete(identifier);
+            }
+
+            if (this.draggedEntities.has(identifier)) {
+                this.draggedEntities.delete(identifier);
+            }
+        }
     }
     _handleTouches (e) {
         const touches = [];
@@ -310,6 +354,7 @@ class Utils {
             worldY: worldCoords.y,
             screenX: e.clientX,
             screenY: e.clientY,
+            which: e.which,
             timestamp: Date.now()
         };
 
@@ -319,28 +364,34 @@ class Utils {
 
         const sortedEntities = this.getSortedEntitiesForInteraction();
         const targetEntity = sortedEntities.find(entity =>
-            this.isPointInEntity(worldCoords.x, worldCoords.y, entity) &&
-            entity.isDraggable()
+            (entity.isDraggable() || entity.isInteractive()) && this.isPointInEntity(worldCoords.x, worldCoords.y, entity)
         );
 
         if (targetEntity) {
-            this.draggedEntity = targetEntity;
+            if (targetEntity.isInteractive()) {
+                targetEntity.trigger('mousedown', eventData);
+                this.mouseDownEntity = targetEntity;
+            }
 
-            this.entities.forEach(entity => {
-                if (entity.zIndex > targetEntity.zIndex) {
-                    entity.zIndex--;
-                }
-            });
+            if (targetEntity.isDraggable()) {
+                this.draggedEntity = targetEntity;
 
-            let maxZIndex = 0;
-            this.entities.forEach(entity => {
-                maxZIndex = Math.max(maxZIndex, entity.zIndex || 0);
-            });
-            targetEntity.zIndex = maxZIndex + 1;
+                this.entities.forEach(entity => {
+                    if (entity.zIndex > targetEntity.zIndex) {
+                        entity.zIndex--;
+                    }
+                });
 
-            this.draggedEntity.dragStartX = worldCoords.x - targetEntity.absoluteX;
-            this.draggedEntity.dragStartY = worldCoords.y - targetEntity.absoluteY;
-            targetEntity.trigger('drag', eventData);
+                let maxZIndex = 0;
+                this.entities.forEach(entity => {
+                    maxZIndex = Math.max(maxZIndex, entity.zIndex || 0);
+                });
+                targetEntity.zIndex = maxZIndex + 1;
+
+                this.draggedEntity.dragStartX = worldCoords.x - targetEntity.absoluteX;
+                this.draggedEntity.dragStartY = worldCoords.y - targetEntity.absoluteY;
+                targetEntity.trigger('drag', eventData);
+            }
         }
     }
     _handleMouseUp (e) {
@@ -354,6 +405,7 @@ class Utils {
             worldY: worldCoords.y,
             screenX: e.clientX,
             screenY: e.clientY,
+            which: e.which,
             timestamp: Date.now()
         };
 
@@ -361,6 +413,12 @@ class Utils {
 
         if (this.physicsEnabled) return;
 
+        if (this.mouseDownEntity && this.mouseDownEntity.isInteractive()) {
+            this.mouseDownEntity.trigger('mouseup', eventData);
+            this.mouseDownEntity = null;
+        }
+
+        // Handle drag end
         if (this.draggedEntity) {
             this.draggedEntity.trigger('drop', eventData);
             this.draggedEntity = null;
@@ -377,6 +435,7 @@ class Utils {
             worldY: worldCoords.y,
             screenX: e.clientX,
             screenY: e.clientY,
+            which: e.which,
             timestamp: Date.now()
         };
 
@@ -384,6 +443,7 @@ class Utils {
 
         if (this.physicsEnabled) return;
 
+        // Handle drag
         if (this.draggedEntity && this.draggedEntity.isDraggable()) {
             let newX = worldCoords.x - this.draggedEntity.dragStartX;
             let newY = worldCoords.y - this.draggedEntity.dragStartY;
@@ -407,21 +467,34 @@ class Utils {
             });
 
             this.draggedEntity.trigger('dragMove', eventData);
-            return;
         }
 
+        if (this.mouseDownEntity && this.mouseDownEntity.isInteractive()) {
+            this.mouseDownEntity.trigger('mousemove', eventData);
+        } else {
+            const sortedEntities = this.getSortedEntitiesForInteraction();
+            const targetEntity = sortedEntities.find(entity =>
+                this.isPointInEntity(worldCoords.x, worldCoords.y, entity)
+            );
+
+            if (targetEntity && targetEntity.isInteractive()) {
+                targetEntity.trigger('mousemove', eventData);
+            }
+        }
+
+        // Handle hover
         const sortedEntities = this.getSortedEntitiesForInteraction();
-        const targetEntity = sortedEntities.find(entity =>
+        const hoverableEntity = sortedEntities.find(entity =>
             this.isPointInEntity(worldCoords.x, worldCoords.y, entity) && entity.isHoverable()
         );
 
-        if (targetEntity !== this.hoveredEntity) {
+        if (hoverableEntity !== this.hoveredEntity) {
             if (this.hoveredEntity)
                 this.hoveredEntity.trigger('hoverOut', eventData);
 
-            if (targetEntity) {
-                this.hoveredEntity = targetEntity;
-                targetEntity.trigger('hover', eventData);
+            if (hoverableEntity) {
+                this.hoveredEntity = hoverableEntity;
+                hoverableEntity.trigger('hover', eventData);
             } else {
                 this.hoveredEntity = null;
             }
@@ -447,6 +520,17 @@ class Utils {
         };
 
         this.trigger('wheel', eventData);
+
+        if (this.physicsEnabled) return;
+
+        const sortedEntities = this.getSortedEntitiesForInteraction();
+        const targetEntity = sortedEntities.find(entity =>
+            entity.isInteractive() && this.isPointInEntity(worldCoords.x, worldCoords.y, entity)
+        );
+
+        if (targetEntity) {
+            targetEntity.trigger('wheel', eventData);
+        }
     }
     /** ======== END ======== */
 
@@ -460,7 +544,7 @@ class Utils {
     }
     _handleClicks (e, trigger) {
         e?.preventDefault?.();
-        this.timeout(() => this.canvas?.focus?.(), 0);
+        Promise.resolve().then(() => this.canvas?.focus?.());
 
         if (!this.running) return;
 
@@ -474,21 +558,22 @@ class Utils {
             screenY: e.clientY,
             timestamp: Date.now()
         };
+        this.trigger(trigger, eventData);
+
+        if (this.physicsEnabled) return;
 
         const sortedEntities = this.getSortedEntitiesForInteraction();
         const targetEntity = sortedEntities.find(entity =>
-            this.isPointInEntity(worldCoords.x, worldCoords.y, entity) && entity.isClickable()
+            (entity.isClickable() || entity.isInteractive()) && this.isPointInEntity(worldCoords.x, worldCoords.y, entity)
         );
 
         if (targetEntity)
             targetEntity.trigger(trigger, eventData);
-
-        this.trigger(trigger, eventData);
     }
     /** ======== END ======== */
 
     /** ======== KEYS ======== */
-    pressedKeys = new Set();
+    pressedKeys = new Map(); // Map<physicalKey, {physical: '', logical: ''}>
     keyMap = {
         'control': 'ctrl',
         ' ': 'space',
@@ -515,8 +600,27 @@ class Utils {
     isKeyPressed (...keys) {
         return keys.some(k => this.pressedKeys.has(k));
     }
-    #normalizeKey (key) {
-        return this.keyMap[key.toLowerCase()] || key.toLowerCase();
+    isLogicalKeyPressed (...keys) {
+        return keys.some(k =>
+            Array.from(this.pressedKeys.values()).some(keyObj => keyObj.logical === k)
+        );
+    }
+    #normalizeKeyPhysical (e) {
+        // Handle letter keys (KeyA, KeyB, KeyC, ...)
+        if (e.code && e.code.startsWith('Key'))
+            return e.code.replace('Key', '').toLowerCase();
+
+        // Handle digit keys (Digit0, Digit1, ...)
+        if (e.code && e.code.startsWith('Digit'))
+            return e.code.replace('Digit', '');
+
+        // Handle special keys using keyMap
+        const keyFromEvent = e.key.toLowerCase();
+        return this.keyMap[keyFromEvent] || keyFromEvent;
+    }
+    #normalizeKeyLogical (e) {
+        const key = e.key.toLowerCase();
+        return this.keyMap[key] || key;
     }
     #orderKeys (keys) {
         const priority = ['ctrl', 'shift', 'alt', 'meta'];
@@ -529,21 +633,54 @@ class Utils {
     _handleKeyDown (e) {
         e?.preventDefault?.();
 
-        const key = this.#normalizeKey(e.key);
-        this.pressedKeys.add(key);
+        // Get normalized keys
+        const physicalKey = this.#normalizeKeyPhysical(e);
+        const logicalKey = this.#normalizeKeyLogical(e);
 
-        const combo = this.#orderKeys(this.pressedKeys).join('+');
+        // Store both physical and logical keys
+        this.pressedKeys.set(physicalKey, {
+            physical: physicalKey,
+            logical: logicalKey
+        });
 
-        this.trigger('keydown', combo, e);
-        this.trigger(combo, combo, e);
+        // Generate combo from physical keys
+        const combo = this.#orderKeys(this.pressedKeys.keys()).join('+');
+
+        // Create key event object with all information
+        const keyEvent = {
+            key: logicalKey,        // The letter typed by the user
+            combo: combo,           // Physical composition (ctrl+a)
+            physical: physicalKey,  // Physical key
+            original: e.key,        // Raw key from browser
+        };
+
+        // Trigger events
+        this.trigger('keydown', keyEvent, e);
+        this.trigger(combo, keyEvent, e);
     }
     _handleKeyUp (e) {
         e?.preventDefault?.();
 
-        const key = this.#normalizeKey(e.key);
-        this.pressedKeys.delete(key);
+        // Get normalized keys
+        const physicalKey = this.#normalizeKeyPhysical(e);
+        const logicalKey = this.#normalizeKeyLogical(e);
 
-        this.trigger('keyup', key, e);
+        // Get combo before removing the key
+        const combo = this.#orderKeys(this.pressedKeys.keys()).join('+');
+
+        // Remove key from pressed map
+        this.pressedKeys.delete(physicalKey);
+
+        // Create key event object
+        const keyEvent = {
+            key: logicalKey,        // The letter typed by the user
+            combo: combo,           // Physical composition (ctrl+a)
+            physical: physicalKey,  // Physical key
+            original: e.key         // Raw key from browser
+        };
+
+        // Trigger event
+        this.trigger('keyup', keyEvent, e);
     }
     /** ======== END ======== */
 

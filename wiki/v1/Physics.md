@@ -1,5 +1,3 @@
-# Physics Class Documentation
-
 The Physics class provides comprehensive 2D physics simulation using Box2D engine. It handles physics bodies, collision
 detection, drag & drop interactions, materials, and various physics forces. The class integrates seamlessly with the
 Pixalo game engine to provide realistic physics behavior for game entities.
@@ -607,7 +605,8 @@ const draggableEntity = game.append({
     events: {
         draggable: true,    // Enable drag & drop
         hoverable: true,    // Enable hover events
-        clickable: true     // Enable click/tap events
+        clickable: true,    // Enable click/tap events
+        interactive: true   // Enable mouse/touch events
     }
 });
 ```
@@ -705,6 +704,7 @@ const config = {
 - `identifier`: Drag identifier
 - `target`: The dragged entity
 - `timestamp`: Event timestamp
+- `which`: Mouse button (for mouse events only)
 
 **`drop`** - Triggered on `entity.on('drop')` when drag ends
 
@@ -717,6 +717,7 @@ const config = {
 - `identifier`: Drag identifier
 - `target`: The dropped entity
 - `timestamp`: Event timestamp
+- `which`: Mouse button (for mouse events only)
 
 **`hover`** - Triggered on `entity.on('hover')` when mouse/touch enters entity (requires `hoverable: true`)
 
@@ -740,7 +741,82 @@ const config = {
 - `target`: The entity being left
 - `timestamp`: Event timestamp
 
-**`click`** - Triggered on `entity.on('click')` on touch/click (requires `clickable: true`)
+**`mousedown`** - Triggered on `entity.on('mousedown')` when mouse button is pressed on entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Always 'mouse'
+- `target`: The clicked entity
+- `which`: Mouse button number
+- `timestamp`: Event timestamp
+
+**`mouseup`** - Triggered on `entity.on('mouseup')` when mouse button is released on entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Always 'mouse'
+- `target`: The clicked entity
+- `which`: Mouse button number
+- `timestamp`: Event timestamp
+
+**`mousemove`** - Triggered on `entity.on('mousemove')` when mouse moves over entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Always 'mouse'
+- `target`: The entity under mouse
+- `which`: Mouse button number
+- `timestamp`: Event timestamp
+
+**`touchstart`** - Triggered on `entity.on('touchstart')` when touch begins on entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Touch ID number
+- `target`: The touched entity
+- `timestamp`: Event timestamp
+
+**`touchend`** - Triggered on `entity.on('touchend')` when touch ends on entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Touch ID number
+- `target`: The touched entity
+- `timestamp`: Event timestamp
+
+**`touchmove`** - Triggered on `entity.on('touchmove')` when touch moves over entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Touch ID number
+- `target`: The entity under touch
+- `timestamp`: Event timestamp
+
+**`click`** - Triggered on `entity.on('click')` when entity is clicked/tapped (requires `clickable: true` or `isInteractive()` to return true)
 
 - `x`: World X coordinate
 - `y`: World Y coordinate
@@ -749,6 +825,32 @@ const config = {
 - `screenX`: Screen X coordinate
 - `screenY`: Screen Y coordinate
 - `target`: The clicked entity
+- `timestamp`: Event timestamp
+
+**`rightclick`** - Triggered on `entity.on('rightclick')` when entity is right-clicked (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `target`: The right-clicked entity
+- `timestamp`: Event timestamp
+
+**`wheel`** - Triggered on `entity.on('wheel')` when mouse wheel is used over entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `target`: The entity under mouse
+- `deltaX`: Horizontal scroll amount
+- `deltaY`: Vertical scroll amount
+- `deltaZ`: Z-axis scroll amount
+- `deltaMode`: Delta mode indicator
 - `timestamp`: Event timestamp
 
 ## Best Practices
