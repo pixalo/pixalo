@@ -49,6 +49,7 @@ class Physics {
         );
 
         this.bodies = new Map();
+        this.joints = new Map();
         this.velocities = new Map();
         this.materials = new Map();
         this.activeContacts = new Map();
@@ -733,10 +734,6 @@ class Physics {
 
         return this;
     }
-    getBodyVelocity (entity) {
-        entity = this._getEntityId(entity);
-        return this.velocities.get(entity);
-    }
     setAngularVelocity (entity, omega) {
         entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
@@ -794,16 +791,6 @@ class Physics {
         body.SetType(b2Type);
         body.SetAwake(true); // wake it up so change takes effect immediately
         return this;
-    }
-    getBodyType (entity) {
-        entity = this._getEntityId(entity);
-        const body = this.bodies.get(entity);
-        if (!body) return null;
-
-        const t = body.GetType();
-        if (t === Box2D.Dynamics.b2Body.b2_staticBody) return 'static';
-        if (t === Box2D.Dynamics.b2Body.b2_kinematicBody) return 'kinematic';
-        return 'dynamic';
     }
     isBodyAwake (entity) {
         entity = this._getEntityId(entity);
@@ -887,6 +874,749 @@ class Physics {
         return this.toggleSensor(entity, false);
     }
     /** ======== END BODY CONTROL ======== */
+
+    /** ======== GET METHODS ======== */
+    getBodyVelocity (entity) {
+        entity = this._getEntityId(entity);
+        return this.velocities.get(entity);
+    }
+    getBodyType (entity) {
+        entity = this._getEntityId(entity);
+        const body = this.bodies.get(entity);
+        if (!body) return null;
+
+        const t = body.GetType();
+        if (t === Box2D.Dynamics.b2Body.b2_staticBody) return 'static';
+        if (t === Box2D.Dynamics.b2Body.b2_kinematicBody) return 'kinematic';
+        return 'dynamic';
+    }
+    getBodySpeed (entity) {
+        entity = this._getEntityId(entity);
+        const velocity = this.getBodyVelocity(entity);
+        return Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+    }
+    /** ======== END GET METHODS ======== */
+
+    /** ======== JOINT SYSTEM ======== */
+    joint (entityA, entityB, config = {}) {
+        const bodyA = this.bodies.get(entityA.id);
+        const bodyB = this.bodies.get(entityB.id);
+
+        if (!bodyA || !bodyB) {
+            this.engine.warn('Both entities must have physics bodies');
+            return null;
+        }
+
+        const jointType = config.type || 'revolute';
+        let joint = null;
+
+        switch (jointType) {
+            case 'revolute':
+                joint = this._createRevoluteJoint(bodyA, bodyB, config);
+                break;
+            case 'distance':
+                joint = this._createDistanceJoint(bodyA, bodyB, config);
+                break;
+            case 'prismatic':
+                joint = this._createPrismaticJoint(bodyA, bodyB, config);
+                break;
+            case 'weld':
+                joint = this._createWeldJoint(bodyA, bodyB, config);
+                break;
+            case 'rope':
+                joint = this._createRopeJoint(bodyA, bodyB, config);
+                break;
+            case 'pulley':
+                joint = this._createPulleyJoint(bodyA, bodyB, config);
+                break;
+            case 'gear':
+                joint = this._createGearJoint(bodyA, bodyB, config);
+                break;
+            case 'friction':
+                joint = this._createFrictionJoint(bodyA, bodyB, config);
+                break;
+            default:
+                this.engine.warn(`Unknown joint type: ${jointType}`);
+                return null;
+        }
+
+        if (joint) {
+            // Store joint reference for cleanup
+            if (!this.joints) this.joints = new Map();
+            const jointId = `${entityA.id}_${entityB.id}_${Date.now()}`;
+            this.joints.set(jointId, {
+                joint,
+                entityA,
+                entityB,
+                type: jointType,
+                config
+            });
+
+            // Trigger joint creation event
+            this.engine.trigger('jointCreated', {
+                jointId,
+                entityA,
+                entityB,
+                type: jointType,
+                joint
+            });
+
+            return jointId;
+        }
+
+        return null;
+    }
+    _createRevoluteJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2RevoluteJointDef();
+
+        // Anchor point (default: center between bodies)
+        let anchorX, anchorY;
+        if (config.anchor) {
+            anchorX = config.anchor.x / this.SCALE;
+            anchorY = config.anchor.y / this.SCALE;
+        } else {
+            const posA = bodyA.GetPosition();
+            const posB = bodyB.GetPosition();
+            anchorX = (posA.x + posB.x) / 2;
+            anchorY = (posA.y + posB.y) / 2;
+        }
+
+        jointDef.Initialize(
+            bodyA,
+            bodyB,
+            new Box2D.Common.Math.b2Vec2(anchorX, anchorY)
+        );
+
+        // Motor settings
+        if (config.motor) {
+            jointDef.enableMotor = true;
+            jointDef.motorSpeed = (config.motor.speed || 0) * Math.PI / 180; // Convert to radians
+            jointDef.maxMotorTorque = config.motor.torque || 1000;
+        }
+
+        // Limit settings
+        if (config.limits) {
+            jointDef.enableLimit = true;
+            jointDef.lowerAngle = (config.limits.lower || 0) * Math.PI / 180;
+            jointDef.upperAngle = (config.limits.upper || 360) * Math.PI / 180;
+        }
+
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createDistanceJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2DistanceJointDef();
+
+        // Anchor points
+        const anchorA = config.anchorA ?
+            new Box2D.Common.Math.b2Vec2(config.anchorA.x / this.SCALE, config.anchorA.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        const anchorB = config.anchorB ?
+            new Box2D.Common.Math.b2Vec2(config.anchorB.x / this.SCALE, config.anchorB.y / this.SCALE) :
+            bodyB.GetWorldCenter();
+
+        jointDef.Initialize(bodyA, bodyB, anchorA, anchorB);
+
+        // Distance settings
+        if (config.length !== undefined) {
+            jointDef.length = config.length / this.SCALE;
+        }
+
+        // Spring settings
+        jointDef.frequencyHz = config.frequency ?? 4.0;
+        jointDef.dampingRatio = config.damping ?? 0.5;
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createPrismaticJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2PrismaticJointDef();
+
+        // Anchor point
+        const anchor = config.anchor ?
+            new Box2D.Common.Math.b2Vec2(config.anchor.x / this.SCALE, config.anchor.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        // Axis direction
+        const axis = config.axis || {x: 1, y: 0};
+        const axisVec = new Box2D.Common.Math.b2Vec2(axis.x, axis.y);
+
+        jointDef.Initialize(bodyA, bodyB, anchor, axisVec);
+
+        // Motor settings
+        if (config.motor) {
+            jointDef.enableMotor = true;
+            jointDef.motorSpeed = config.motor.speed / this.SCALE || 0;
+            jointDef.maxMotorForce = config.motor.force || 1000;
+        }
+
+        // Limit settings
+        if (config.limits) {
+            jointDef.enableLimit = true;
+            jointDef.lowerTranslation = (config.limits.lower || 0) / this.SCALE;
+            jointDef.upperTranslation = (config.limits.upper || 100) / this.SCALE;
+        }
+
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createWeldJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2WeldJointDef();
+
+        // Anchor point
+        const anchor = config.anchor ?
+            new Box2D.Common.Math.b2Vec2(config.anchor.x / this.SCALE, config.anchor.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        jointDef.Initialize(bodyA, bodyB, anchor);
+
+        // Flexibility settings
+        jointDef.frequencyHz = config.frequency ?? 0;
+        jointDef.dampingRatio = config.damping ?? 0;
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createRopeJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2RopeJointDef();
+
+        // Local anchor points
+        jointDef.localAnchorA = config.anchorA ?
+            new Box2D.Common.Math.b2Vec2(config.anchorA.x / this.SCALE, config.anchorA.y / this.SCALE) :
+            new Box2D.Common.Math.b2Vec2(0, 0);
+
+        jointDef.localAnchorB = config.anchorB ?
+            new Box2D.Common.Math.b2Vec2(config.anchorB.x / this.SCALE, config.anchorB.y / this.SCALE) :
+            new Box2D.Common.Math.b2Vec2(0, 0);
+
+        jointDef.bodyA = bodyA;
+        jointDef.bodyB = bodyB;
+        jointDef.maxLength = (config.maxLength || 100) / this.SCALE;
+        jointDef.collideConnected = config.collideConnected ?? true;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createPulleyJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2PulleyJointDef();
+
+        if (!config.groundAnchorA || !config.groundAnchorB) {
+            this.engine.warn('Pulley joint requires groundAnchorA and groundAnchorB');
+            return null;
+        }
+
+        const groundAnchorA = new Box2D.Common.Math.b2Vec2(
+            config.groundAnchorA.x / this.SCALE,
+            config.groundAnchorA.y / this.SCALE
+        );
+
+        const groundAnchorB = new Box2D.Common.Math.b2Vec2(
+            config.groundAnchorB.x / this.SCALE,
+            config.groundAnchorB.y / this.SCALE
+        );
+
+        const anchorA = config.anchorA ?
+            new Box2D.Common.Math.b2Vec2(config.anchorA.x / this.SCALE, config.anchorA.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        const anchorB = config.anchorB ?
+            new Box2D.Common.Math.b2Vec2(config.anchorB.x / this.SCALE, config.anchorB.y / this.SCALE) :
+            bodyB.GetWorldCenter();
+
+        const ratio = config.ratio || 1.0;
+
+        jointDef.Initialize(bodyA, bodyB, groundAnchorA, groundAnchorB, anchorA, anchorB, ratio);
+        jointDef.collideConnected = config.collideConnected ?? true;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createGearJoint (bodyA, bodyB, config) {
+        if (!config.joint1 || !config.joint2) {
+            this.engine.warn('Gear joint requires joint1 and joint2');
+            return null;
+        }
+
+        const jointDef = new Box2D.Dynamics.Joints.b2GearJointDef();
+
+        jointDef.bodyA = bodyA;
+        jointDef.bodyB = bodyB;
+        jointDef.joint1 = config.joint1;
+        jointDef.joint2 = config.joint2;
+        jointDef.ratio = config.ratio || 1.0;
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createFrictionJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2FrictionJointDef();
+
+        const anchor = config.anchor ?
+            new Box2D.Common.Math.b2Vec2(config.anchor.x / this.SCALE, config.anchor.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        jointDef.Initialize(bodyA, bodyB, anchor);
+        jointDef.maxForce = config.maxForce || 1000;
+        jointDef.maxTorque = config.maxTorque || 1000;
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    destroyJoint (jointId) {
+        if (!this.joints || !this.joints.has(jointId)) {
+            this.engine.warn(`Joint with ID ${jointId} not found`);
+            return false;
+        }
+
+        const jointData = this.joints.get(jointId);
+        const {joint, entityA, entityB, type} = jointData;
+
+        try {
+            this.world.DestroyJoint(joint);
+            this.joints.delete(jointId);
+
+            // Trigger joint destruction event
+            this.engine.trigger('jointDestroyed', {
+                jointId,
+                entityA,
+                entityB,
+                type
+            });
+
+            return true;
+        } catch (error) {
+            this.engine.warn('Error destroying joint:', error);
+            return false;
+        }
+    }
+    getJoint (jointId) {
+        return this.joints ? this.joints.get(jointId) : null;
+    }
+    getAllJoints () {
+        return this.joints ? Array.from(this.joints.entries()) : [];
+    }
+    updateJointMotor (jointId, speed, torqueOrForce) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute') {
+                joint.SetMotorSpeed(speed * Math.PI / 180); // Convert to radians
+                if (torqueOrForce !== undefined) {
+                    joint.SetMaxMotorTorque(torqueOrForce);
+                }
+            } else if (type === 'prismatic') {
+                joint.SetMotorSpeed(speed / this.SCALE);
+                if (torqueOrForce !== undefined) {
+                    joint.SetMaxMotorForce(torqueOrForce);
+                }
+            } else {
+                this.engine.warn(`Motor control not available for ${type} joints`);
+            }
+        } catch (error) {
+            this.engine.warn('Error updating joint motor:', error);
+        }
+
+        return this;
+    }
+    enableJointMotor (jointId, enable = true) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute' || type === 'prismatic') {
+                joint.EnableMotor(enable);
+            } else {
+                this.engine.warn(`Motor control not available for ${type} joints`);
+            }
+        } catch (error) {
+            this.engine.warn('Error toggling joint motor:', error);
+        }
+
+        return this;
+    }
+    setJointLimits (jointId, lower, upper) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute') {
+                joint.SetLimits(
+                    lower * Math.PI / 180, // Convert to radians
+                    upper * Math.PI / 180
+                );
+            } else if (type === 'prismatic') {
+                joint.SetLimits(
+                    lower / this.SCALE,
+                    upper / this.SCALE
+                );
+            } else {
+                this.engine.warn(`Limits not available for ${type} joints`);
+            }
+        } catch (error) {
+            this.engine.warn('Error setting joint limits:', error);
+        }
+
+        return this;
+    }
+    enableJointLimits (jointId, enable = true) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute' || type === 'prismatic') {
+                joint.EnableLimit(enable);
+            } else {
+                this.engine.warn(`Limits not available for ${type} joints`);
+            }
+        } catch (error) {
+            this.engine.warn('Error toggling joint limits:', error);
+        }
+
+        return this;
+    }
+    getJointReactionForce (jointId, invDt = 60) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint} = jointData;
+
+        try {
+            const force = joint.GetReactionForce(1 / invDt);
+            return {
+                x: force.x * this.SCALE,
+                y: force.y * this.SCALE,
+                magnitude: Math.sqrt(force.x * force.x + force.y * force.y) * this.SCALE
+            };
+        } catch (error) {
+            this.engine.warn('Error getting joint reaction force:', error);
+            return null;
+        }
+    }
+    getJointReactionTorque (jointId, invDt = 60) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint} = jointData;
+
+        try {
+            return joint.GetReactionTorque(1 / invDt);
+        } catch (error) {
+            this.engine.warn('Error getting joint reaction torque:', error);
+            return null;
+        }
+    }
+    getJointAngle (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute') {
+                return joint.GetJointAngle() * 180 / Math.PI; // Convert to degrees
+            } else {
+                this.engine.warn(`Angle not available for ${type} joints`);
+                return null;
+            }
+        } catch (error) {
+            this.engine.warn('Error getting joint angle:', error);
+            return null;
+        }
+    }
+    getJointSpeed (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute') {
+                return joint.GetJointSpeed() * 180 / Math.PI; // Convert to degrees per second
+            } else if (type === 'prismatic') {
+                return joint.GetJointSpeed() * this.SCALE; // Convert to pixels per second
+            } else {
+                this.engine.warn(`Speed not available for ${type} joints`);
+                return null;
+            }
+        } catch (error) {
+            this.engine.warn('Error getting joint speed:', error);
+            return null;
+        }
+    }
+    getJointTranslation (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'prismatic') {
+                return joint.GetJointTranslation() * this.SCALE; // Convert to pixels
+            } else {
+                this.engine.warn(`Translation not available for ${type} joints`);
+                return null;
+            }
+        } catch (error) {
+            this.engine.warn('Error getting joint translation:', error);
+            return null;
+        }
+    }
+    isJointLimitEnabled (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return false;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute' || type === 'prismatic') {
+                return joint.IsLimitEnabled();
+            } else {
+                return false;
+            }
+        } catch (error) {
+            this.engine.warn('Error checking joint limit status:', error);
+            return false;
+        }
+    }
+    isJointMotorEnabled (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return false;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute' || type === 'prismatic') {
+                return joint.IsMotorEnabled();
+            } else {
+                return false;
+            }
+        } catch (error) {
+            this.engine.warn('Error checking joint motor status:', error);
+            return false;
+        }
+    }
+    createHinge (entityA, entityB, options = {}) {
+        return this.joint(entityA, entityB, {
+            type: 'revolute',
+            anchor: options.anchor,
+            motor: options.motor,
+            limits: options.limits,
+            collideConnected: options.collideConnected ?? false
+        });
+    }
+    createSpring (entityA, entityB, options = {}) {
+        return this.joint(entityA, entityB, {
+            type: 'distance',
+            anchorA: options.anchorA,
+            anchorB: options.anchorB,
+            length: options.length,
+            frequency: options.stiffness ?? 4.0,
+            damping: options.damping ?? 0.5,
+            collideConnected: options.collideConnected ?? false
+        });
+    }
+    createSlider (entityA, entityB, options = {}) {
+        return this.joint(entityA, entityB, {
+            type: 'prismatic',
+            anchor: options.anchor,
+            axis: options.axis || {x: 1, y: 0},
+            motor: options.motor,
+            limits: options.limits,
+            collideConnected: options.collideConnected ?? false
+        });
+    }
+    createChain (entities, options = {}) {
+        if (!entities || entities.length < 2) {
+            this.engine.warn('Chain requires at least 2 entities');
+            return [];
+        }
+
+        const joints = [];
+        const jointType = options.type || 'revolute';
+        const spacing = options.spacing || 0;
+
+        for (let i = 0; i < entities.length - 1; i++) {
+            const entityA = entities[i];
+            const entityB = entities[i + 1];
+
+            let anchor = null;
+            if (spacing === 0) {
+                // Default: connect at the edge between entities
+                const posA = {
+                    x: entityA.absoluteX + entityA.width / 2,
+                    y: entityA.absoluteY + entityA.height / 2
+                };
+                const posB = {
+                    x: entityB.absoluteX + entityB.width / 2,
+                    y: entityB.absoluteY + entityB.height / 2
+                };
+                anchor = {
+                    x: (posA.x + posB.x) / 2,
+                    y: (posA.y + posB.y) / 2
+                };
+            }
+
+            const jointConfig = {
+                type: jointType,
+                anchor: anchor,
+                collideConnected: options.collideConnected ?? false,
+                ...options.jointConfig
+            };
+
+            const jointId = this.joint(entityA, entityB, jointConfig);
+            if (jointId) {
+                joints.push(jointId);
+            }
+        }
+
+        // Trigger chain creation event
+        this.engine.trigger('chainCreated', {
+            entities,
+            joints,
+            options
+        });
+
+        return joints;
+    }
+    createRope (entities, options = {}) {
+        return this.createChain(entities, {
+            ...options,
+            type: 'distance',
+            jointConfig: {
+                frequency: options.flexibility ?? 2.0,
+                damping: options.damping ?? 0.3,
+                ...options.jointConfig
+            }
+        });
+    }
+    destroyAllJoints () {
+        if (!this.joints) return this;
+
+        const jointIds = Array.from(this.joints.keys());
+        for (const jointId of jointIds) {
+            this.destroyJoint(jointId);
+        }
+
+        return this;
+    }
+    getJointsForEntity (entity) {
+        if (!this.joints) return [];
+
+        const entityId = this._getEntityId(entity);
+        const entityJoints = [];
+
+        for (const [jointId, jointData] of this.joints) {
+            if (jointData.entityA.id === entityId || jointData.entityB.id === entityId) {
+                entityJoints.push({jointId, ...jointData});
+            }
+        }
+
+        return entityJoints;
+    }
+    breakJointsForEntity (entity) {
+        const entityJoints = this.getJointsForEntity(entity);
+        const brokenJoints = [];
+
+        for (const joint of entityJoints) {
+            if (this.destroyJoint(joint.jointId)) {
+                brokenJoints.push(joint.jointId);
+            }
+        }
+
+        // Trigger break event
+        if (brokenJoints.length > 0) {
+            this.engine.trigger('jointsBreak', {
+                entity,
+                brokenJoints
+            });
+        }
+
+        return brokenJoints;
+    }
+    monitorJointStress (jointId, maxForce, maxTorque, callback) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        // Create a monitoring function
+        const monitor = () => {
+            if (!this.joints || !this.joints.has(jointId)) {
+                // Joint was destroyed, stop monitoring
+                return;
+            }
+
+            const reactionForce = this.getJointReactionForce(jointId);
+            const reactionTorque = this.getJointReactionTorque(jointId);
+
+            let stressed = false;
+            const stressData = {
+                jointId,
+                force: reactionForce,
+                torque: reactionTorque,
+                maxForce,
+                maxTorque
+            };
+
+            if (reactionForce && maxForce && reactionForce.magnitude > maxForce) {
+                stressed = true;
+                stressData.forceExceeded = true;
+            }
+
+            if (reactionTorque && maxTorque && Math.abs(reactionTorque) > maxTorque) {
+                stressed = true;
+                stressData.torqueExceeded = true;
+            }
+
+            if (stressed && callback) {
+                callback(stressData);
+            }
+
+            // Continue monitoring
+            if (this.engine.running) {
+                requestAnimationFrame(monitor);
+            }
+        };
+
+        // Start monitoring
+        requestAnimationFrame(monitor);
+        return this;
+    }
+    debugJoint (jointId, options = {}) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return;
+
+        const {joint, type, entityA, entityB} = jointData;
+
+        const debugInfo = {
+            id: jointId,
+            type: type,
+            entityA: entityA.id,
+            entityB: entityB.id,
+            angle: this.getJointAngle(jointId),
+            speed: this.getJointSpeed(jointId),
+            translation: this.getJointTranslation(jointId),
+            reactionForce: this.getJointReactionForce(jointId),
+            reactionTorque: this.getJointReactionTorque(jointId),
+            motorEnabled: this.isJointMotorEnabled(jointId),
+            limitEnabled: this.isJointLimitEnabled(jointId)
+        };
+
+        if (options.log !== false) {
+            console.table(debugInfo);
+        }
+
+        return debugInfo;
+    }
+    /** ======== END JOINT SYSTEM ======== */
 
     /** ======== DRAG & DROP ======== */
     _setupDragListeners () {
@@ -1387,6 +2117,17 @@ class Physics {
             this.velocities.clear();
             this.materials.clear();
             this.activeContacts.clear();
+
+            if (this.joints) {
+                for (const [jointId, jointData] of this.joints) {
+                    try {
+                        this.world.DestroyJoint(jointData.joint);
+                    } catch (error) {
+                        // Joint might already be destroyed
+                    }
+                }
+                this.joints.clear();
+            }
 
             // Recreate world with original settings
             this.world = new Box2D.Dynamics.b2World(
