@@ -51,6 +51,7 @@ class Physics {
         this.bodies = new Map();
         this.velocities = new Map();
         this.materials = new Map();
+        this.activeContacts = new Map();
 
         this._setupContactListener();
 
@@ -98,6 +99,53 @@ class Physics {
     }
 
     /** ======== SETUP COLLISION ======== */
+    isTouching (entityA, entityB) {
+        const idA = this._getEntityId(entityA);
+        const idB = this._getEntityId(entityB);
+
+        const contactsA = this.activeContacts.get(idA);
+        return contactsA ? contactsA.includes(idB) : false;
+    }
+    getCollisionSides (contact, worldManifold) {
+        const fixtureA = contact.GetFixtureA();
+        const fixtureB = contact.GetFixtureB();
+
+        if (fixtureA.IsSensor() || fixtureB.IsSensor()) {
+            const bodyA = fixtureA.GetBody();
+            const bodyB = fixtureB.GetBody();
+            const posA = bodyA.GetPosition();
+            const posB = bodyB.GetPosition();
+
+            const dx = posB.x - posA.x;
+            const dy = posB.y - posA.y;
+
+            let sideA, sideB;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                sideA = dx > 0 ? 'right' : 'left';
+                sideB = dx > 0 ? 'left' : 'right';
+            } else {
+                sideA = dy > 0 ? 'bottom' : 'top';
+                sideB = dy > 0 ? 'top' : 'bottom';
+            }
+
+            return {sideA, sideB};
+        }
+
+        const normal = worldManifold.m_normal;
+
+        let sideA, sideB;
+
+        if (Math.abs(normal.x) > Math.abs(normal.y)) {
+            sideA = normal.x > 0 ? 'left' : 'right';
+            sideB = normal.x > 0 ? 'right' : 'left';
+        } else {
+            sideA = normal.y > 0 ? 'top' : 'bottom';
+            sideB = normal.y > 0 ? 'bottom' : 'top';
+        }
+
+        return {sideA, sideB};
+    }
     _setupContactListener () {
         const listener = new Box2D.Dynamics.b2ContactListener();
 
@@ -106,6 +154,9 @@ class Physics {
             const entityB = contact.GetFixtureB().GetBody().GetUserData();
 
             if (!entityA || !entityB) return;
+
+            this._addContact(entityA.id, entityB.id);
+            this._addContact(entityB.id, entityA.id);
 
             const worldManifold = new Box2D.Collision.b2WorldManifold();
             contact.GetWorldManifold(worldManifold);
@@ -172,6 +223,9 @@ class Physics {
             const entityA = contact.GetFixtureA().GetBody().GetUserData();
             const entityB = contact.GetFixtureB().GetBody().GetUserData();
 
+            this._removeContact(entityA.id, entityB.id);
+            this._removeContact(entityB.id, entityA.id);
+
             // emit to physics
             this.engine.trigger('collisionEnd', {entityA, entityB, contact});
 
@@ -195,45 +249,25 @@ class Physics {
 
         this.world.SetContactListener(listener);
     }
-    getCollisionSides (contact, worldManifold) {
-        const fixtureA = contact.GetFixtureA();
-        const fixtureB = contact.GetFixtureB();
+    _addContact (entityId, targetId) {
+        if (!this.activeContacts.has(entityId))
+            this.activeContacts.set(entityId, []);
 
-        if (fixtureA.IsSensor() || fixtureB.IsSensor()) {
-            const bodyA = fixtureA.GetBody();
-            const bodyB = fixtureB.GetBody();
-            const posA = bodyA.GetPosition();
-            const posB = bodyB.GetPosition();
+        const contacts = this.activeContacts.get(entityId);
+        if (!contacts.includes(targetId))
+            contacts.push(targetId);
+    }
+    _removeContact (entityId, targetId) {
+        if (!this.activeContacts.has(entityId)) return;
 
-            const dx = posB.x - posA.x;
-            const dy = posB.y - posA.y;
+        const contacts = this.activeContacts.get(entityId);
+        const index = contacts.indexOf(targetId);
 
-            let sideA, sideB;
-
-            if (Math.abs(dx) > Math.abs(dy)) {
-                sideA = dx > 0 ? 'right' : 'left';
-                sideB = dx > 0 ? 'left' : 'right';
-            } else {
-                sideA = dy > 0 ? 'bottom' : 'top';
-                sideB = dy > 0 ? 'top' : 'bottom';
-            }
-
-            return {sideA, sideB};
+        if (index !== -1) {
+            contacts.splice(index, 1);
+            if (contacts.length === 0)
+                this.activeContacts.delete(entityId);
         }
-
-        const normal = worldManifold.m_normal;
-
-        let sideA, sideB;
-
-        if (Math.abs(normal.x) > Math.abs(normal.y)) {
-            sideA = normal.x > 0 ? 'left' : 'right';
-            sideB = normal.x > 0 ? 'right' : 'left';
-        } else {
-            sideA = normal.y > 0 ? 'top' : 'bottom';
-            sideB = normal.y > 0 ? 'bottom' : 'top';
-        }
-
-        return {sideA, sideB};
     }
     /** ======== END SETUP COLLISION ======== */
 
@@ -245,8 +279,12 @@ class Physics {
         const bodyDef = new Box2D.Dynamics.b2BodyDef();
         const scaled = this._getScaledDimensions(entity);
 
-        // Set body type
-        switch (config.bodyType) {
+        // merge material + config
+        const mat = this.materials.get(config.material) || {};
+        const props = {...mat, ...config};
+
+        // body type
+        switch (props.bodyType) {
             case 'static':
                 bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
                 break;
@@ -257,58 +295,46 @@ class Physics {
                 bodyDef.type = Box2D.Dynamics.b2Body.b2_dynamicBody;
         }
 
-        // Setting the initial position
+        // initial transform
         bodyDef.position.x = (entity.absoluteX + scaled.width / 2) / this.SCALE;
         bodyDef.position.y = (entity.absoluteY + scaled.height / 2) / this.SCALE;
-        bodyDef.angle = entity.styles.rotation * Math.PI / 180;
+        bodyDef.angle = (entity.styles.rotation || 0) * Math.PI / 180;
 
-        // Create a body
+        // body-level flags
+        bodyDef.gravityScale = props.gravityScale ?? 1;
+        bodyDef.bullet = props.bullet ?? false;
+        bodyDef.allowSleep = props.sleeping ?? true;
+
+        // create body & shape
         const body = this.world.CreateBody(bodyDef);
         const shape = this._createShape(entity);
 
-        // Enhanced fixture definition
+        // fixture definition
         const fixtureDef = new Box2D.Dynamics.b2FixtureDef();
         fixtureDef.shape = shape;
+        fixtureDef.isSensor = props.sensor || false;
+        fixtureDef.density = props.density ?? this.config.density;
+        fixtureDef.friction = props.friction ?? this.config.friction;
+        fixtureDef.restitution = props.restitution ?? this.config.restitution;
 
-        // Material handling
-        if (config.material && this.materials.has(config.material)) {
-            const material = this.materials.get(config.material);
-            fixtureDef.density = material.density;
-            fixtureDef.friction = material.friction;
-            fixtureDef.restitution = material.restitution;
-        } else {
-            fixtureDef.density = config.density || this.config.density;
-            fixtureDef.friction = config.friction || this.config.friction;
-            fixtureDef.restitution = config.restitution || this.config.restitution;
-        }
-
-        fixtureDef.isSensor = config?.sensor || false;
-
-        // Collision filtering
-        if (config.collision) {
-            fixtureDef.filter.categoryBits = config.collision.categoryBits || 0x0001;
-            fixtureDef.filter.maskBits = config.collision.maskBits || 0xFFFF;
-            fixtureDef.filter.groupIndex = config.collision.groupIndex || 0;
-        }
+        // collision filter
+        const filter = new Box2D.Dynamics.b2FilterData();
+        const c_filter = props.collision, m_filter = mat.filter;
+        filter.categoryBits = c_filter?.categoryBits ?? m_filter?.categoryBits ?? 0x0001;
+        filter.maskBits = c_filter?.maskBits ?? m_filter?.maskBits ?? 0xFFFF;
+        filter.groupIndex = c_filter?.groupIndex ?? m_filter?.groupIndex ?? 0;
+        fixtureDef.filter = filter;
 
         body.CreateFixture(fixtureDef);
 
-        // Set fixed rotation (prevent spinning)
-        const fixedRotation = config.fixedRotation ?? entity.physics?.fixedRotation ?? this.config.drag?.fixedRotation ?? false;
-        body.SetFixedRotation(fixedRotation);
+        // runtime body properties
+        body.SetFixedRotation(props.fixedRotation ?? false);
+        body.SetLinearDamping(props.linearDamping ?? 0.1);
+        body.SetAngularDamping(props.angularDamping ?? 1);
 
-        // Set damping values
-        const angularDamping = config.angularDamping ?? entity.physics?.angularDamping ?? this.config.drag?.angularDamping ?? 1;
-        const linearDamping = config.linearDamping ?? entity.physics?.linearDamping ?? this.config.drag?.linearDamping ?? 0.1;
-
-        body.SetAngularDamping(angularDamping);
-        body.SetLinearDamping(linearDamping);
-
-        // Save body and velocity
+        // register
         this.bodies.set(entity.id, body);
         this.velocities.set(entity.id, {x: 0, y: 0});
-
-        // Adding a reference to an entity
         body.SetUserData(entity);
 
         return body;
@@ -323,7 +349,7 @@ class Physics {
                 this.world.DestroyBody(body);
                 this.bodies.delete(entity.id);
                 this.velocities.delete(entity.id);
-
+                this.activeContacts.delete(entity.id);
                 this.bodies.delete(entity.id);
             });
         }
@@ -462,6 +488,9 @@ class Physics {
             return this;
         }
     }
+    _getEntityId (entity) {
+        return this.engine.isEntity(entity) ? entity.id : entity;
+    }
     /** ======== END ENTITIES ======== */
 
     /** ======== SHAPES ======== */
@@ -592,10 +621,41 @@ class Physics {
 
     /** ======== MATERIAL ======== */
     createMaterial (name, properties) {
+        const {
+            // physical
+            bodyType = 'dynamic',
+            density = 1,
+            friction = 0.3,
+            restitution = 0.2,
+
+            // damping
+            linearDamping = 0.1,
+            angularDamping = 1,
+
+            // behaviour
+            fixedRotation = false,
+            gravityScale = 1, // 0 = weight-less, Negative value = anti-gravity
+            bullet = false,
+            sleeping = true,
+
+            // filters
+            categoryBits = 0x0001,
+            maskBits = 0xFFFF,
+            groupIndex = 0
+        } = properties;
+
         this.materials.set(name, {
-            friction: properties.friction ?? this.config.friction,
-            restitution: properties.restitution ?? this.config.restitution,
-            density: properties.density ?? this.config.density
+            bodyType,
+            density,
+            friction,
+            restitution,
+            linearDamping,
+            angularDamping,
+            fixedRotation,
+            gravityScale,
+            bullet,
+            sleeping,
+            filter: {categoryBits, maskBits, groupIndex}
         });
         return this;
     }
@@ -620,7 +680,7 @@ class Physics {
         return this;
     }
     applyForce (entity, force) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             const center = body.GetWorldCenter();
@@ -632,7 +692,7 @@ class Physics {
         return this;
     }
     setVelocity (entity, velocity) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             body.SetLinearVelocity(
@@ -645,7 +705,7 @@ class Physics {
         return this;
     }
     setVelocityLimit (entity, limit) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             body.SetLinearVelocity({
@@ -674,11 +734,11 @@ class Physics {
         return this;
     }
     getBodyVelocity (entity) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         return this.velocities.get(entity);
     }
     setAngularVelocity (entity, omega) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             body.SetAngularVelocity(omega);
@@ -686,7 +746,7 @@ class Physics {
         return this;
     }
     applyTorque (entity, torque) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             body.ApplyTorque(torque);
@@ -694,7 +754,7 @@ class Physics {
         return this;
     }
     applyImpulse (entity, impulse, point = null) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             const worldPoint = point ? new Box2D.Common.Math.b2Vec2(
@@ -711,7 +771,7 @@ class Physics {
 
     /** ======== BODY CONTROL ======== */
     setBodyType (entity, type) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (!body) return this;
 
@@ -736,7 +796,7 @@ class Physics {
         return this;
     }
     getBodyType (entity) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (!body) return null;
 
@@ -746,18 +806,18 @@ class Physics {
         return 'dynamic';
     }
     isBodyAwake (entity) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         return body ? body.IsAwake() : false;
     }
     setBodyAwake (entity, awake) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) body.SetAwake(awake);
         return this;
     }
     setBodyProperties (entity, properties) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             const fixture = body.GetFixtureList();
@@ -780,12 +840,14 @@ class Physics {
         return this;
     }
     haltBody (entity) {
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (!body) return;
         body.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
         return this;
     }
     brakeBody (entity, dampingFactor = 0.9, minSpeed = 0.05) {
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (!body) return this;
 
@@ -805,6 +867,24 @@ class Physics {
 
         body.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(v.x * ratio, v.y * ratio));
         return this;
+    }
+    toggleSensor (entity, turnOn = true) {
+        entity = this._getEntityId(entity);
+        const body = this.bodies.get(entity);
+        if (!body) return this;
+
+        let fixture = body.GetFixtureList();
+        while (fixture) {
+            fixture.SetSensor(!!turnOn);   // true  -> sensor
+            fixture = fixture.GetNext();   // false -> solid
+        }
+        return this;
+    }
+    enableSensor (entity) {
+        return this.toggleSensor(entity, true);
+    }
+    disableSensor (entity) {
+        return this.toggleSensor(entity, false);
     }
     /** ======== END BODY CONTROL ======== */
 
@@ -1306,6 +1386,7 @@ class Physics {
             this.bodies.clear();
             this.velocities.clear();
             this.materials.clear();
+            this.activeContacts.clear();
 
             // Recreate world with original settings
             this.world = new Box2D.Dynamics.b2World(
