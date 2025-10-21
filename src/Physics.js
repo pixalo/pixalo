@@ -49,8 +49,10 @@ class Physics {
         );
 
         this.bodies = new Map();
+        this.joints = new Map();
         this.velocities = new Map();
         this.materials = new Map();
+        this.activeContacts = new Map();
 
         this._setupContactListener();
 
@@ -98,6 +100,53 @@ class Physics {
     }
 
     /** ======== SETUP COLLISION ======== */
+    isTouching (entityA, entityB) {
+        const idA = this._getEntityId(entityA);
+        const idB = this._getEntityId(entityB);
+
+        const contactsA = this.activeContacts.get(idA);
+        return contactsA ? contactsA.includes(idB) : false;
+    }
+    getCollisionSides (contact, worldManifold) {
+        const fixtureA = contact.GetFixtureA();
+        const fixtureB = contact.GetFixtureB();
+
+        if (fixtureA.IsSensor() || fixtureB.IsSensor()) {
+            const bodyA = fixtureA.GetBody();
+            const bodyB = fixtureB.GetBody();
+            const posA = bodyA.GetPosition();
+            const posB = bodyB.GetPosition();
+
+            const dx = posB.x - posA.x;
+            const dy = posB.y - posA.y;
+
+            let sideA, sideB;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                sideA = dx > 0 ? 'right' : 'left';
+                sideB = dx > 0 ? 'left' : 'right';
+            } else {
+                sideA = dy > 0 ? 'bottom' : 'top';
+                sideB = dy > 0 ? 'top' : 'bottom';
+            }
+
+            return {sideA, sideB};
+        }
+
+        const normal = worldManifold.m_normal;
+
+        let sideA, sideB;
+
+        if (Math.abs(normal.x) > Math.abs(normal.y)) {
+            sideA = normal.x > 0 ? 'left' : 'right';
+            sideB = normal.x > 0 ? 'right' : 'left';
+        } else {
+            sideA = normal.y > 0 ? 'top' : 'bottom';
+            sideB = normal.y > 0 ? 'bottom' : 'top';
+        }
+
+        return {sideA, sideB};
+    }
     _setupContactListener () {
         const listener = new Box2D.Dynamics.b2ContactListener();
 
@@ -106,6 +155,9 @@ class Physics {
             const entityB = contact.GetFixtureB().GetBody().GetUserData();
 
             if (!entityA || !entityB) return;
+
+            this._addContact(entityA.id, entityB.id);
+            this._addContact(entityB.id, entityA.id);
 
             const worldManifold = new Box2D.Collision.b2WorldManifold();
             contact.GetWorldManifold(worldManifold);
@@ -172,6 +224,9 @@ class Physics {
             const entityA = contact.GetFixtureA().GetBody().GetUserData();
             const entityB = contact.GetFixtureB().GetBody().GetUserData();
 
+            this._removeContact(entityA.id, entityB.id);
+            this._removeContact(entityB.id, entityA.id);
+
             // emit to physics
             this.engine.trigger('collisionEnd', {entityA, entityB, contact});
 
@@ -195,45 +250,25 @@ class Physics {
 
         this.world.SetContactListener(listener);
     }
-    getCollisionSides (contact, worldManifold) {
-        const fixtureA = contact.GetFixtureA();
-        const fixtureB = contact.GetFixtureB();
+    _addContact (entityId, targetId) {
+        if (!this.activeContacts.has(entityId))
+            this.activeContacts.set(entityId, []);
 
-        if (fixtureA.IsSensor() || fixtureB.IsSensor()) {
-            const bodyA = fixtureA.GetBody();
-            const bodyB = fixtureB.GetBody();
-            const posA = bodyA.GetPosition();
-            const posB = bodyB.GetPosition();
+        const contacts = this.activeContacts.get(entityId);
+        if (!contacts.includes(targetId))
+            contacts.push(targetId);
+    }
+    _removeContact (entityId, targetId) {
+        if (!this.activeContacts.has(entityId)) return;
 
-            const dx = posB.x - posA.x;
-            const dy = posB.y - posA.y;
+        const contacts = this.activeContacts.get(entityId);
+        const index = contacts.indexOf(targetId);
 
-            let sideA, sideB;
-
-            if (Math.abs(dx) > Math.abs(dy)) {
-                sideA = dx > 0 ? 'right' : 'left';
-                sideB = dx > 0 ? 'left' : 'right';
-            } else {
-                sideA = dy > 0 ? 'bottom' : 'top';
-                sideB = dy > 0 ? 'top' : 'bottom';
-            }
-
-            return {sideA, sideB};
+        if (index !== -1) {
+            contacts.splice(index, 1);
+            if (contacts.length === 0)
+                this.activeContacts.delete(entityId);
         }
-
-        const normal = worldManifold.m_normal;
-
-        let sideA, sideB;
-
-        if (Math.abs(normal.x) > Math.abs(normal.y)) {
-            sideA = normal.x > 0 ? 'left' : 'right';
-            sideB = normal.x > 0 ? 'right' : 'left';
-        } else {
-            sideA = normal.y > 0 ? 'top' : 'bottom';
-            sideB = normal.y > 0 ? 'bottom' : 'top';
-        }
-
-        return {sideA, sideB};
     }
     /** ======== END SETUP COLLISION ======== */
 
@@ -245,8 +280,12 @@ class Physics {
         const bodyDef = new Box2D.Dynamics.b2BodyDef();
         const scaled = this._getScaledDimensions(entity);
 
-        // Set body type
-        switch (config.bodyType) {
+        // merge material + config
+        const mat = this.materials.get(config.material) || {};
+        const props = {...mat, ...config};
+
+        // body type
+        switch (props.bodyType) {
             case 'static':
                 bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
                 break;
@@ -257,58 +296,46 @@ class Physics {
                 bodyDef.type = Box2D.Dynamics.b2Body.b2_dynamicBody;
         }
 
-        // Setting the initial position
+        // initial transform
         bodyDef.position.x = (entity.absoluteX + scaled.width / 2) / this.SCALE;
         bodyDef.position.y = (entity.absoluteY + scaled.height / 2) / this.SCALE;
-        bodyDef.angle = entity.styles.rotation * Math.PI / 180;
+        bodyDef.angle = (entity.styles.rotation || 0) * Math.PI / 180;
 
-        // Create a body
+        // body-level flags
+        bodyDef.gravityScale = props.gravityScale ?? 1;
+        bodyDef.bullet = props.bullet ?? false;
+        bodyDef.allowSleep = props.sleeping ?? true;
+
+        // create body & shape
         const body = this.world.CreateBody(bodyDef);
         const shape = this._createShape(entity);
 
-        // Enhanced fixture definition
+        // fixture definition
         const fixtureDef = new Box2D.Dynamics.b2FixtureDef();
         fixtureDef.shape = shape;
+        fixtureDef.isSensor = props.sensor || false;
+        fixtureDef.density = props.density ?? this.config.density;
+        fixtureDef.friction = props.friction ?? this.config.friction;
+        fixtureDef.restitution = props.restitution ?? this.config.restitution;
 
-        // Material handling
-        if (config.material && this.materials.has(config.material)) {
-            const material = this.materials.get(config.material);
-            fixtureDef.density = material.density;
-            fixtureDef.friction = material.friction;
-            fixtureDef.restitution = material.restitution;
-        } else {
-            fixtureDef.density = config.density || this.config.density;
-            fixtureDef.friction = config.friction || this.config.friction;
-            fixtureDef.restitution = config.restitution || this.config.restitution;
-        }
-
-        fixtureDef.isSensor = config?.sensor || false;
-
-        // Collision filtering
-        if (config.collision) {
-            fixtureDef.filter.categoryBits = config.collision.categoryBits || 0x0001;
-            fixtureDef.filter.maskBits = config.collision.maskBits || 0xFFFF;
-            fixtureDef.filter.groupIndex = config.collision.groupIndex || 0;
-        }
+        // collision filter
+        const filter = new Box2D.Dynamics.b2FilterData();
+        const c_filter = props.collision, m_filter = mat.filter;
+        filter.categoryBits = c_filter?.categoryBits ?? m_filter?.categoryBits ?? 0x0001;
+        filter.maskBits = c_filter?.maskBits ?? m_filter?.maskBits ?? 0xFFFF;
+        filter.groupIndex = c_filter?.groupIndex ?? m_filter?.groupIndex ?? 0;
+        fixtureDef.filter = filter;
 
         body.CreateFixture(fixtureDef);
 
-        // Set fixed rotation (prevent spinning)
-        const fixedRotation = config.fixedRotation ?? entity.physics?.fixedRotation ?? this.config.drag?.fixedRotation ?? false;
-        body.SetFixedRotation(fixedRotation);
+        // runtime body properties
+        body.SetFixedRotation(props.fixedRotation ?? false);
+        body.SetLinearDamping(props.linearDamping ?? 0.1);
+        body.SetAngularDamping(props.angularDamping ?? 1);
 
-        // Set damping values
-        const angularDamping = config.angularDamping ?? entity.physics?.angularDamping ?? this.config.drag?.angularDamping ?? 1;
-        const linearDamping = config.linearDamping ?? entity.physics?.linearDamping ?? this.config.drag?.linearDamping ?? 0.1;
-
-        body.SetAngularDamping(angularDamping);
-        body.SetLinearDamping(linearDamping);
-
-        // Save body and velocity
+        // register
         this.bodies.set(entity.id, body);
         this.velocities.set(entity.id, {x: 0, y: 0});
-
-        // Adding a reference to an entity
         body.SetUserData(entity);
 
         return body;
@@ -323,7 +350,7 @@ class Physics {
                 this.world.DestroyBody(body);
                 this.bodies.delete(entity.id);
                 this.velocities.delete(entity.id);
-
+                this.activeContacts.delete(entity.id);
                 this.bodies.delete(entity.id);
             });
         }
@@ -462,6 +489,9 @@ class Physics {
             return this;
         }
     }
+    _getEntityId (entity) {
+        return this.engine.isEntity(entity) ? entity.id : entity;
+    }
     /** ======== END ENTITIES ======== */
 
     /** ======== SHAPES ======== */
@@ -592,10 +622,41 @@ class Physics {
 
     /** ======== MATERIAL ======== */
     createMaterial (name, properties) {
+        const {
+            // physical
+            bodyType = 'dynamic',
+            density = 1,
+            friction = 0.3,
+            restitution = 0.2,
+
+            // damping
+            linearDamping = 0.1,
+            angularDamping = 1,
+
+            // behaviour
+            fixedRotation = false,
+            gravityScale = 1, // 0 = weight-less, Negative value = anti-gravity
+            bullet = false,
+            sleeping = true,
+
+            // filters
+            categoryBits = 0x0001,
+            maskBits = 0xFFFF,
+            groupIndex = 0
+        } = properties;
+
         this.materials.set(name, {
-            friction: properties.friction ?? this.config.friction,
-            restitution: properties.restitution ?? this.config.restitution,
-            density: properties.density ?? this.config.density
+            bodyType,
+            density,
+            friction,
+            restitution,
+            linearDamping,
+            angularDamping,
+            fixedRotation,
+            gravityScale,
+            bullet,
+            sleeping,
+            filter: {categoryBits, maskBits, groupIndex}
         });
         return this;
     }
@@ -620,7 +681,7 @@ class Physics {
         return this;
     }
     applyForce (entity, force) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             const center = body.GetWorldCenter();
@@ -632,7 +693,7 @@ class Physics {
         return this;
     }
     setVelocity (entity, velocity) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             body.SetLinearVelocity(
@@ -645,7 +706,7 @@ class Physics {
         return this;
     }
     setVelocityLimit (entity, limit) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             body.SetLinearVelocity({
@@ -673,12 +734,8 @@ class Physics {
 
         return this;
     }
-    getBodyVelocity (entity) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
-        return this.velocities.get(entity);
-    }
     setAngularVelocity (entity, omega) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             body.SetAngularVelocity(omega);
@@ -686,7 +743,7 @@ class Physics {
         return this;
     }
     applyTorque (entity, torque) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             body.ApplyTorque(torque);
@@ -694,7 +751,7 @@ class Physics {
         return this;
     }
     applyImpulse (entity, impulse, point = null) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             const worldPoint = point ? new Box2D.Common.Math.b2Vec2(
@@ -711,7 +768,7 @@ class Physics {
 
     /** ======== BODY CONTROL ======== */
     setBodyType (entity, type) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (!body) return this;
 
@@ -735,29 +792,19 @@ class Physics {
         body.SetAwake(true); // wake it up so change takes effect immediately
         return this;
     }
-    getBodyType (entity) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
-        const body = this.bodies.get(entity);
-        if (!body) return null;
-
-        const t = body.GetType();
-        if (t === Box2D.Dynamics.b2Body.b2_staticBody) return 'static';
-        if (t === Box2D.Dynamics.b2Body.b2_kinematicBody) return 'kinematic';
-        return 'dynamic';
-    }
     isBodyAwake (entity) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         return body ? body.IsAwake() : false;
     }
     setBodyAwake (entity, awake) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) body.SetAwake(awake);
         return this;
     }
     setBodyProperties (entity, properties) {
-        entity = this.engine.isEntity(entity) ? entity?.id : entity;
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (body) {
             const fixture = body.GetFixtureList();
@@ -780,12 +827,14 @@ class Physics {
         return this;
     }
     haltBody (entity) {
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (!body) return;
         body.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
         return this;
     }
     brakeBody (entity, dampingFactor = 0.9, minSpeed = 0.05) {
+        entity = this._getEntityId(entity);
         const body = this.bodies.get(entity);
         if (!body) return this;
 
@@ -806,7 +855,734 @@ class Physics {
         body.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(v.x * ratio, v.y * ratio));
         return this;
     }
+    toggleSensor (entity, turnOn = true) {
+        entity = this._getEntityId(entity);
+        const body = this.bodies.get(entity);
+        if (!body) return this;
+
+        let fixture = body.GetFixtureList();
+        while (fixture) {
+            fixture.SetSensor(!!turnOn);   // true  -> sensor
+            fixture = fixture.GetNext();   // false -> solid
+        }
+        return this;
+    }
+    enableSensor (entity) {
+        return this.toggleSensor(entity, true);
+    }
+    disableSensor (entity) {
+        return this.toggleSensor(entity, false);
+    }
     /** ======== END BODY CONTROL ======== */
+
+    /** ======== GET METHODS ======== */
+    getBodyVelocity (entity) {
+        entity = this._getEntityId(entity);
+        return this.velocities.get(entity);
+    }
+    getBodyType (entity) {
+        entity = this._getEntityId(entity);
+        const body = this.bodies.get(entity);
+        if (!body) return null;
+
+        const t = body.GetType();
+        if (t === Box2D.Dynamics.b2Body.b2_staticBody) return 'static';
+        if (t === Box2D.Dynamics.b2Body.b2_kinematicBody) return 'kinematic';
+        return 'dynamic';
+    }
+    getBodySpeed (entity) {
+        entity = this._getEntityId(entity);
+        const velocity = this.getBodyVelocity(entity);
+        return Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+    }
+    /** ======== END GET METHODS ======== */
+
+    /** ======== JOINT SYSTEM ======== */
+    joint (entityA, entityB, config = {}) {
+        const bodyA = this.bodies.get(entityA.id);
+        const bodyB = this.bodies.get(entityB.id);
+
+        if (!bodyA || !bodyB) {
+            this.engine.warn('Both entities must have physics bodies');
+            return null;
+        }
+
+        const jointType = config.type || 'revolute';
+        let joint = null;
+
+        switch (jointType) {
+            case 'revolute':
+                joint = this._createRevoluteJoint(bodyA, bodyB, config);
+                break;
+            case 'distance':
+                joint = this._createDistanceJoint(bodyA, bodyB, config);
+                break;
+            case 'prismatic':
+                joint = this._createPrismaticJoint(bodyA, bodyB, config);
+                break;
+            case 'weld':
+                joint = this._createWeldJoint(bodyA, bodyB, config);
+                break;
+            case 'rope':
+                joint = this._createRopeJoint(bodyA, bodyB, config);
+                break;
+            case 'pulley':
+                joint = this._createPulleyJoint(bodyA, bodyB, config);
+                break;
+            case 'gear':
+                joint = this._createGearJoint(bodyA, bodyB, config);
+                break;
+            case 'friction':
+                joint = this._createFrictionJoint(bodyA, bodyB, config);
+                break;
+            default:
+                this.engine.warn(`Unknown joint type: ${jointType}`);
+                return null;
+        }
+
+        if (joint) {
+            // Store joint reference for cleanup
+            if (!this.joints) this.joints = new Map();
+            const jointId = `${entityA.id}_${entityB.id}_${Date.now()}`;
+            this.joints.set(jointId, {
+                joint,
+                entityA,
+                entityB,
+                type: jointType,
+                config
+            });
+
+            // Trigger joint creation event
+            this.engine.trigger('jointCreated', {
+                jointId,
+                entityA,
+                entityB,
+                type: jointType,
+                joint
+            });
+
+            return jointId;
+        }
+
+        return null;
+    }
+    _createRevoluteJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2RevoluteJointDef();
+
+        // Anchor point (default: center between bodies)
+        let anchorX, anchorY;
+        if (config.anchor) {
+            anchorX = config.anchor.x / this.SCALE;
+            anchorY = config.anchor.y / this.SCALE;
+        } else {
+            const posA = bodyA.GetPosition();
+            const posB = bodyB.GetPosition();
+            anchorX = (posA.x + posB.x) / 2;
+            anchorY = (posA.y + posB.y) / 2;
+        }
+
+        jointDef.Initialize(
+            bodyA,
+            bodyB,
+            new Box2D.Common.Math.b2Vec2(anchorX, anchorY)
+        );
+
+        // Motor settings
+        if (config.motor) {
+            jointDef.enableMotor = true;
+            jointDef.motorSpeed = (config.motor.speed || 0) * Math.PI / 180; // Convert to radians
+            jointDef.maxMotorTorque = config.motor.torque || 1000;
+        }
+
+        // Limit settings
+        if (config.limits) {
+            jointDef.enableLimit = true;
+            jointDef.lowerAngle = (config.limits.lower || 0) * Math.PI / 180;
+            jointDef.upperAngle = (config.limits.upper || 360) * Math.PI / 180;
+        }
+
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createDistanceJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2DistanceJointDef();
+
+        // Anchor points
+        const anchorA = config.anchorA ?
+            new Box2D.Common.Math.b2Vec2(config.anchorA.x / this.SCALE, config.anchorA.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        const anchorB = config.anchorB ?
+            new Box2D.Common.Math.b2Vec2(config.anchorB.x / this.SCALE, config.anchorB.y / this.SCALE) :
+            bodyB.GetWorldCenter();
+
+        jointDef.Initialize(bodyA, bodyB, anchorA, anchorB);
+
+        // Distance settings
+        if (config.length !== undefined) {
+            jointDef.length = config.length / this.SCALE;
+        }
+
+        // Spring settings
+        jointDef.frequencyHz = config.frequency ?? 4.0;
+        jointDef.dampingRatio = config.damping ?? 0.5;
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createPrismaticJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2PrismaticJointDef();
+
+        // Anchor point
+        const anchor = config.anchor ?
+            new Box2D.Common.Math.b2Vec2(config.anchor.x / this.SCALE, config.anchor.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        // Axis direction
+        const axis = config.axis || {x: 1, y: 0};
+        const axisVec = new Box2D.Common.Math.b2Vec2(axis.x, axis.y);
+
+        jointDef.Initialize(bodyA, bodyB, anchor, axisVec);
+
+        // Motor settings
+        if (config.motor) {
+            jointDef.enableMotor = true;
+            jointDef.motorSpeed = config.motor.speed / this.SCALE || 0;
+            jointDef.maxMotorForce = config.motor.force || 1000;
+        }
+
+        // Limit settings
+        if (config.limits) {
+            jointDef.enableLimit = true;
+            jointDef.lowerTranslation = (config.limits.lower || 0) / this.SCALE;
+            jointDef.upperTranslation = (config.limits.upper || 100) / this.SCALE;
+        }
+
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createWeldJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2WeldJointDef();
+
+        // Anchor point
+        const anchor = config.anchor ?
+            new Box2D.Common.Math.b2Vec2(config.anchor.x / this.SCALE, config.anchor.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        jointDef.Initialize(bodyA, bodyB, anchor);
+
+        // Flexibility settings
+        jointDef.frequencyHz = config.frequency ?? 0;
+        jointDef.dampingRatio = config.damping ?? 0;
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createRopeJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2RopeJointDef();
+
+        // Local anchor points
+        jointDef.localAnchorA = config.anchorA ?
+            new Box2D.Common.Math.b2Vec2(config.anchorA.x / this.SCALE, config.anchorA.y / this.SCALE) :
+            new Box2D.Common.Math.b2Vec2(0, 0);
+
+        jointDef.localAnchorB = config.anchorB ?
+            new Box2D.Common.Math.b2Vec2(config.anchorB.x / this.SCALE, config.anchorB.y / this.SCALE) :
+            new Box2D.Common.Math.b2Vec2(0, 0);
+
+        jointDef.bodyA = bodyA;
+        jointDef.bodyB = bodyB;
+        jointDef.maxLength = (config.maxLength || 100) / this.SCALE;
+        jointDef.collideConnected = config.collideConnected ?? true;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createPulleyJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2PulleyJointDef();
+
+        if (!config.groundAnchorA || !config.groundAnchorB) {
+            this.engine.warn('Pulley joint requires groundAnchorA and groundAnchorB');
+            return null;
+        }
+
+        const groundAnchorA = new Box2D.Common.Math.b2Vec2(
+            config.groundAnchorA.x / this.SCALE,
+            config.groundAnchorA.y / this.SCALE
+        );
+
+        const groundAnchorB = new Box2D.Common.Math.b2Vec2(
+            config.groundAnchorB.x / this.SCALE,
+            config.groundAnchorB.y / this.SCALE
+        );
+
+        const anchorA = config.anchorA ?
+            new Box2D.Common.Math.b2Vec2(config.anchorA.x / this.SCALE, config.anchorA.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        const anchorB = config.anchorB ?
+            new Box2D.Common.Math.b2Vec2(config.anchorB.x / this.SCALE, config.anchorB.y / this.SCALE) :
+            bodyB.GetWorldCenter();
+
+        const ratio = config.ratio || 1.0;
+
+        jointDef.Initialize(bodyA, bodyB, groundAnchorA, groundAnchorB, anchorA, anchorB, ratio);
+        jointDef.collideConnected = config.collideConnected ?? true;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createGearJoint (bodyA, bodyB, config) {
+        if (!config.joint1 || !config.joint2) {
+            this.engine.warn('Gear joint requires joint1 and joint2');
+            return null;
+        }
+
+        const jointDef = new Box2D.Dynamics.Joints.b2GearJointDef();
+
+        jointDef.bodyA = bodyA;
+        jointDef.bodyB = bodyB;
+        jointDef.joint1 = config.joint1;
+        jointDef.joint2 = config.joint2;
+        jointDef.ratio = config.ratio || 1.0;
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    _createFrictionJoint (bodyA, bodyB, config) {
+        const jointDef = new Box2D.Dynamics.Joints.b2FrictionJointDef();
+
+        const anchor = config.anchor ?
+            new Box2D.Common.Math.b2Vec2(config.anchor.x / this.SCALE, config.anchor.y / this.SCALE) :
+            bodyA.GetWorldCenter();
+
+        jointDef.Initialize(bodyA, bodyB, anchor);
+        jointDef.maxForce = config.maxForce || 1000;
+        jointDef.maxTorque = config.maxTorque || 1000;
+        jointDef.collideConnected = config.collideConnected ?? false;
+
+        return this.world.CreateJoint(jointDef);
+    }
+    getJoint (jointId) {
+        return this.joints ? this.joints.get(jointId) : null;
+    }
+    getAllJoints () {
+        return this.joints ? Array.from(this.joints.entries()) : [];
+    }
+    updateJointMotor (jointId, speed, torqueOrForce) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute') {
+                joint.SetMotorSpeed(speed * Math.PI / 180); // Convert to radians
+                if (torqueOrForce !== undefined) {
+                    joint.SetMaxMotorTorque(torqueOrForce);
+                }
+            } else if (type === 'prismatic') {
+                joint.SetMotorSpeed(speed / this.SCALE);
+                if (torqueOrForce !== undefined) {
+                    joint.SetMaxMotorForce(torqueOrForce);
+                }
+            } else {
+                this.engine.warn(`Motor control not available for ${type} joints`);
+            }
+        } catch (error) {
+            this.engine.warn('Error updating joint motor:', error);
+        }
+
+        return this;
+    }
+    enableJointMotor (jointId, enable = true) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute' || type === 'prismatic') {
+                joint.EnableMotor(enable);
+            } else {
+                this.engine.warn(`Motor control not available for ${type} joints`);
+            }
+        } catch (error) {
+            this.engine.warn('Error toggling joint motor:', error);
+        }
+
+        return this;
+    }
+    setJointLimits (jointId, lower, upper) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute') {
+                joint.SetLimits(
+                    lower * Math.PI / 180, // Convert to radians
+                    upper * Math.PI / 180
+                );
+            } else if (type === 'prismatic') {
+                joint.SetLimits(
+                    lower / this.SCALE,
+                    upper / this.SCALE
+                );
+            } else {
+                this.engine.warn(`Limits not available for ${type} joints`);
+            }
+        } catch (error) {
+            this.engine.warn('Error setting joint limits:', error);
+        }
+
+        return this;
+    }
+    enableJointLimits (jointId, enable = true) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute' || type === 'prismatic') {
+                joint.EnableLimit(enable);
+            } else {
+                this.engine.warn(`Limits not available for ${type} joints`);
+            }
+        } catch (error) {
+            this.engine.warn('Error toggling joint limits:', error);
+        }
+
+        return this;
+    }
+    getJointReactionForce (jointId, invDt = 60) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint} = jointData;
+
+        try {
+            const force = joint.GetReactionForce(1 / invDt);
+            return {
+                x: force.x * this.SCALE,
+                y: force.y * this.SCALE,
+                magnitude: Math.sqrt(force.x * force.x + force.y * force.y) * this.SCALE
+            };
+        } catch (error) {
+            this.engine.warn('Error getting joint reaction force:', error);
+            return null;
+        }
+    }
+    getJointReactionTorque (jointId, invDt = 60) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint} = jointData;
+
+        try {
+            return joint.GetReactionTorque(1 / invDt);
+        } catch (error) {
+            this.engine.warn('Error getting joint reaction torque:', error);
+            return null;
+        }
+    }
+    getJointAngle (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute') {
+                return joint.GetJointAngle() * 180 / Math.PI; // Convert to degrees
+            } else {
+                this.engine.warn(`Angle not available for ${type} joints`);
+                return null;
+            }
+        } catch (error) {
+            this.engine.warn('Error getting joint angle:', error);
+            return null;
+        }
+    }
+    getJointSpeed (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute') {
+                return joint.GetJointSpeed() * 180 / Math.PI; // Convert to degrees per second
+            } else if (type === 'prismatic') {
+                return joint.GetJointSpeed() * this.SCALE; // Convert to pixels per second
+            } else {
+                this.engine.warn(`Speed not available for ${type} joints`);
+                return null;
+            }
+        } catch (error) {
+            this.engine.warn('Error getting joint speed:', error);
+            return null;
+        }
+    }
+    getJointTranslation (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return null;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'prismatic') {
+                return joint.GetJointTranslation() * this.SCALE; // Convert to pixels
+            } else {
+                this.engine.warn(`Translation not available for ${type} joints`);
+                return null;
+            }
+        } catch (error) {
+            this.engine.warn('Error getting joint translation:', error);
+            return null;
+        }
+    }
+    isJointLimitEnabled (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return false;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute' || type === 'prismatic') {
+                return joint.IsLimitEnabled();
+            } else {
+                return false;
+            }
+        } catch (error) {
+            this.engine.warn('Error checking joint limit status:', error);
+            return false;
+        }
+    }
+    isJointMotorEnabled (jointId) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return false;
+
+        const {joint, type} = jointData;
+
+        try {
+            if (type === 'revolute' || type === 'prismatic') {
+                return joint.IsMotorEnabled();
+            } else {
+                return false;
+            }
+        } catch (error) {
+            this.engine.warn('Error checking joint motor status:', error);
+            return false;
+        }
+    }
+    createHinge (entityA, entityB, options = {}) {
+        return this.joint(entityA, entityB, {
+            type: 'revolute',
+            anchor: options.anchor,
+            motor: options.motor,
+            limits: options.limits,
+            collideConnected: options.collideConnected ?? false
+        });
+    }
+    createSpring (entityA, entityB, options = {}) {
+        return this.joint(entityA, entityB, {
+            type: 'distance',
+            anchorA: options.anchorA,
+            anchorB: options.anchorB,
+            length: options.length,
+            frequency: options.stiffness ?? 4.0,
+            damping: options.damping ?? 0.5,
+            collideConnected: options.collideConnected ?? false
+        });
+    }
+    createSlider (entityA, entityB, options = {}) {
+        return this.joint(entityA, entityB, {
+            type: 'prismatic',
+            anchor: options.anchor,
+            axis: options.axis || {x: 1, y: 0},
+            motor: options.motor,
+            limits: options.limits,
+            collideConnected: options.collideConnected ?? false
+        });
+    }
+    createChain (entities, options = {}) {
+        if (!entities || entities.length < 2) {
+            this.engine.warn('Chain requires at least 2 entities');
+            return [];
+        }
+
+        const joints = [];
+        const jointType = options.type || 'revolute';
+        const spacing = options.spacing || 0;
+
+        for (let i = 0; i < entities.length - 1; i++) {
+            const entityA = entities[i];
+            const entityB = entities[i + 1];
+
+            let anchor = null;
+            if (spacing === 0) {
+                // Default: connect at the edge between entities
+                const posA = {
+                    x: entityA.absoluteX + entityA.width / 2,
+                    y: entityA.absoluteY + entityA.height / 2
+                };
+                const posB = {
+                    x: entityB.absoluteX + entityB.width / 2,
+                    y: entityB.absoluteY + entityB.height / 2
+                };
+                anchor = {
+                    x: (posA.x + posB.x) / 2,
+                    y: (posA.y + posB.y) / 2
+                };
+            }
+
+            const jointConfig = {
+                type: jointType,
+                anchor: anchor,
+                collideConnected: options.collideConnected ?? false,
+                ...options.jointConfig
+            };
+
+            const jointId = this.joint(entityA, entityB, jointConfig);
+            if (jointId) {
+                joints.push(jointId);
+            }
+        }
+
+        // Trigger chain creation event
+        this.engine.trigger('chainCreated', {
+            entities,
+            joints,
+            options
+        });
+
+        return joints;
+    }
+    createRope (entities, options = {}) {
+        return this.createChain(entities, {
+            ...options,
+            type: 'distance',
+            jointConfig: {
+                frequency: options.flexibility ?? 2.0,
+                damping: options.damping ?? 0.3,
+                ...options.jointConfig
+            }
+        });
+    }
+    monitorJointStress (jointId, maxForce, maxTorque, callback) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return this;
+
+        // Create a monitoring function
+        const monitor = () => {
+            if (!this.joints || !this.joints.has(jointId)) {
+                // Joint was destroyed, stop monitoring
+                return;
+            }
+
+            const reactionForce = this.getJointReactionForce(jointId);
+            const reactionTorque = this.getJointReactionTorque(jointId);
+
+            let stressed = false;
+            const stressData = {
+                jointId,
+                force: reactionForce,
+                torque: reactionTorque,
+                maxForce,
+                maxTorque
+            };
+
+            if (reactionForce && maxForce && reactionForce.magnitude > maxForce) {
+                stressed = true;
+                stressData.forceExceeded = true;
+            }
+
+            if (reactionTorque && maxTorque && Math.abs(reactionTorque) > maxTorque) {
+                stressed = true;
+                stressData.torqueExceeded = true;
+            }
+
+            if (stressed && callback) {
+                callback(stressData);
+            }
+
+            // Continue monitoring
+            if (this.engine.running) {
+                requestAnimationFrame(monitor);
+            }
+        };
+
+        // Start monitoring
+        requestAnimationFrame(monitor);
+        return this;
+    }
+    destroyJoint (jointId) {
+        if (!this.joints || !this.joints.has(jointId)) {
+            this.engine.warn(`Joint with ID ${jointId} not found`);
+            return false;
+        }
+
+        const jointData = this.joints.get(jointId);
+        const {joint, entityA, entityB, type} = jointData;
+
+        try {
+            this.world.DestroyJoint(joint);
+            this.joints.delete(jointId);
+
+            // Trigger joint destruction event
+            this.engine.trigger('jointDestroyed', {
+                jointId,
+                entityA,
+                entityB,
+                type
+            });
+
+            return true;
+        } catch (error) {
+            this.engine.warn('Error destroying joint:', error);
+            return false;
+        }
+    }
+    destroyAllJoints () {
+        if (!this.joints) return this;
+
+        const jointIds = Array.from(this.joints.keys());
+        for (const jointId of jointIds) {
+            this.destroyJoint(jointId);
+        }
+
+        return this;
+    }
+    debugJoint (jointId, options = {}) {
+        const jointData = this.getJoint(jointId);
+        if (!jointData) return;
+
+        const {joint, type, entityA, entityB} = jointData;
+
+        const debugInfo = {
+            id: jointId,
+            type: type,
+            entityA: entityA.id,
+            entityB: entityB.id,
+            angle: this.getJointAngle(jointId),
+            speed: this.getJointSpeed(jointId),
+            translation: this.getJointTranslation(jointId),
+            reactionForce: this.getJointReactionForce(jointId),
+            reactionTorque: this.getJointReactionTorque(jointId),
+            motorEnabled: this.isJointMotorEnabled(jointId),
+            limitEnabled: this.isJointLimitEnabled(jointId)
+        };
+
+        if (options.log !== false) {
+            console.table(debugInfo);
+        }
+
+        return debugInfo;
+    }
+    /** ======== END JOINT SYSTEM ======== */
 
     /** ======== DRAG & DROP ======== */
     _setupDragListeners () {
@@ -817,8 +1593,12 @@ class Physics {
         const CLICK_TIME_THRESHOLD = 200;
         const MOUSE_IDENTIFIER = 'mouse';
 
+        // Track entities that received start events
+        this.mouseDownEntity = null;
+        this.touchStartEntities = new Map();
+
         // Helper function to create event data
-        const createEventData = (screenX, screenY, worldPos, identifier = null, target = null) => {
+        const createEventData = (screenX, screenY, worldPos, identifier = null, target = null, which = null) => {
             const data = {
                 x: worldPos.x,
                 y: worldPos.y,
@@ -831,6 +1611,7 @@ class Physics {
 
             if (identifier !== null) data.identifier = identifier;
             if (target !== null) data.target = target;
+            if (which !== null) data.which = which;
 
             return data;
         };
@@ -847,9 +1628,18 @@ class Physics {
             const entities = Array.from(this.bodies.entries());
             for (const [entityId, body] of entities) {
                 const entity = body.GetUserData();
-                if (entity && entity.events.draggable && this._isPointInEntity(x, y, entity)) {
-                    this._startDrag(entity, worldPos.x, worldPos.y, MOUSE_IDENTIFIER);
-                    entity.trigger('drag', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, entity));
+                if (entity && this._isPointInEntity(x, y, entity)) {
+                    // Interactive events
+                    if (entity.isInteractive && entity.isInteractive()) {
+                        entity.trigger('mousedown', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, entity, e.which));
+                        this.mouseDownEntity = entity;
+                    }
+
+                    // Drag events
+                    if (entity.events.draggable) {
+                        this._startDrag(entity, worldPos.x, worldPos.y, MOUSE_IDENTIFIER);
+                        entity.trigger('drag', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, entity));
+                    }
                     break;
                 }
             }
@@ -861,6 +1651,21 @@ class Physics {
             const x = e.screenX - rect.left;
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
+
+            // Interactive mousemove for tracked entity
+            if (this.mouseDownEntity && this.mouseDownEntity.isInteractive && this.mouseDownEntity.isInteractive()) {
+                this.mouseDownEntity.trigger('mousemove', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, this.mouseDownEntity, e.which));
+            } else {
+                // Interactive mousemove for current entity under cursor
+                const entities = Array.from(this.bodies.entries());
+                for (const [entityId, body] of entities) {
+                    const entity = body.GetUserData();
+                    if (entity && entity.isInteractive && entity.isInteractive() && this._isPointInEntity(x, y, entity)) {
+                        entity.trigger('mousemove', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, entity, e.which));
+                        break;
+                    }
+                }
+            }
 
             // Hover handling
             let foundEntity = null;
@@ -888,7 +1693,7 @@ class Physics {
                 const dragBodyData = this.draggedBodies.get(MOUSE_IDENTIFIER);
                 if (dragBodyData && dragBodyData.entity && dragBodyData.entity.events.draggable) {
                     this._updateDrag(worldPos.x, worldPos.y, MOUSE_IDENTIFIER);
-                    dragBodyData.entity.trigger('dragMove', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, dragBodyData.entity));
+                    dragBodyData.entity.trigger('dragMove', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, dragBodyData.entity, e.which));
                 }
             }
         });
@@ -900,12 +1705,43 @@ class Physics {
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
 
+            // Interactive mouseup for tracked entity
+            if (this.mouseDownEntity && this.mouseDownEntity.isInteractive && this.mouseDownEntity.isInteractive()) {
+                this.mouseDownEntity.trigger('mouseup', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, this.mouseDownEntity, e.which));
+                this.mouseDownEntity = null;
+            }
+
+            // Drag handling
             if (this.mouseJoints.has(MOUSE_IDENTIFIER)) {
                 const dragBodyData = this.draggedBodies.get(MOUSE_IDENTIFIER);
                 if (dragBodyData && dragBodyData.entity) {
-                    dragBodyData.entity.trigger('drop', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, dragBodyData.entity));
+                    dragBodyData.entity.trigger('drop', createEventData(x, y, worldPos, MOUSE_IDENTIFIER, dragBodyData.entity, e.which));
                 }
                 this._endDrag(MOUSE_IDENTIFIER);
+            }
+        });
+
+        // Mouse wheel events
+        this.engine.on('wheel', (e) => {
+            if (!this.engine.running) return;
+
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.screenX - rect.left;
+            const y = e.screenY - rect.top;
+            const worldPos = {x: e.worldX, y: e.worldY};
+
+            const entities = Array.from(this.bodies.entries());
+            for (const [entityId, body] of entities) {
+                const entity = body.GetUserData();
+                if (entity && entity.isInteractive && entity.isInteractive() && this._isPointInEntity(x, y, entity)) {
+                    const eventData = createEventData(x, y, worldPos, null, entity);
+                    eventData.deltaX = e.deltaX;
+                    eventData.deltaY = e.deltaY;
+                    eventData.deltaZ = e.deltaZ;
+                    eventData.deltaMode = e.deltaMode;
+                    entity.trigger('wheel', eventData);
+                    break;
+                }
             }
         });
 
@@ -927,9 +1763,18 @@ class Physics {
 
             for (const [entityId, body] of entities) {
                 const entity = body.GetUserData();
-                if (entity && entity.events.draggable && this._isPointInEntity(x, y, entity)) {
-                    this._startDrag(entity, worldPos.x, worldPos.y, e.identifier);
-                    entity.trigger('drag', createEventData(x, y, worldPos, e.identifier, entity));
+                if (entity && this._isPointInEntity(x, y, entity)) {
+                    // Interactive events
+                    if (entity.isInteractive && entity.isInteractive()) {
+                        entity.trigger('touchstart', createEventData(x, y, worldPos, e.identifier, entity));
+                        this.touchStartEntities.set(e.identifier, entity);
+                    }
+
+                    // Drag events
+                    if (entity.events.draggable) {
+                        this._startDrag(entity, worldPos.x, worldPos.y, e.identifier);
+                        entity.trigger('drag', createEventData(x, y, worldPos, e.identifier, entity));
+                    }
                     break;
                 }
             }
@@ -942,6 +1787,23 @@ class Physics {
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
 
+            // Interactive touchmove for tracked entity
+            const touchStartEntity = this.touchStartEntities.get(e.identifier);
+            if (touchStartEntity && touchStartEntity.isInteractive && touchStartEntity.isInteractive()) {
+                touchStartEntity.trigger('touchmove', createEventData(x, y, worldPos, e.identifier, touchStartEntity));
+            } else {
+                // Interactive touchmove for current entity under touch
+                const entities = Array.from(this.bodies.entries());
+                for (const [entityId, body] of entities) {
+                    const entity = body.GetUserData();
+                    if (entity && entity.isInteractive && entity.isInteractive() && this._isPointInEntity(x, y, entity)) {
+                        entity.trigger('touchmove', createEventData(x, y, worldPos, e.identifier, entity));
+                        break;
+                    }
+                }
+            }
+
+            // Drag handling
             if (this.mouseJoints.has(e.identifier)) {
                 const dragBodyData = this.draggedBodies.get(e.identifier);
                 if (dragBodyData && dragBodyData.entity) {
@@ -959,11 +1821,19 @@ class Physics {
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
 
+            // Interactive touchend for tracked entity
+            const touchStartEntity = this.touchStartEntities.get(e.identifier);
+            if (touchStartEntity && touchStartEntity.isInteractive && touchStartEntity.isInteractive()) {
+                touchStartEntity.trigger('touchend', createEventData(x, y, worldPos, e.identifier, touchStartEntity));
+                this.touchStartEntities.delete(e.identifier);
+            }
+
             const dx = x - touchStartPosition.x;
             const dy = y - touchStartPosition.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
             const timeDiff = currentTime - touchStartTime;
 
+            // Click detection
             if (distance < CLICK_THRESHOLD && timeDiff < CLICK_TIME_THRESHOLD) {
                 const entities = Array.from(this.bodies.entries());
                 for (const [entityId, body] of entities) {
@@ -975,6 +1845,7 @@ class Physics {
                 }
             }
 
+            // Drag handling
             if (this.mouseJoints.has(e.identifier)) {
                 const dragBodyData = this.draggedBodies.get(e.identifier);
                 if (dragBodyData && dragBodyData.entity) {
@@ -991,12 +1862,58 @@ class Physics {
             const y = e.screenY - rect.top;
             const worldPos = {x: e.worldX, y: e.worldY};
 
+            // Clean up tracked entity
+            if (this.touchStartEntities.has(e.identifier)) {
+                this.touchStartEntities.delete(e.identifier);
+            }
+
+            // Drag handling
             if (this.mouseJoints.has(e.identifier)) {
                 const dragBodyData = this.draggedBodies.get(e.identifier);
                 if (dragBodyData && dragBodyData.entity) {
                     dragBodyData.entity.trigger('drop', createEventData(x, y, worldPos, e.identifier, dragBodyData.entity));
                 }
                 this._endDrag(e.identifier);
+            }
+        });
+
+        // Click events (separate from touch/mouse)
+        this.engine.on('click', (e) => {
+            if (!this.engine.running) return;
+
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.screenX - rect.left;
+            const y = e.screenY - rect.top;
+            const worldPos = {x: e.worldX, y: e.worldY};
+
+            const entities = Array.from(this.bodies.entries());
+            for (const [entityId, body] of entities) {
+                const entity = body.GetUserData();
+                if (entity && this._isPointInEntity(x, y, entity)) {
+                    if (entity.isInteractive && entity.isInteractive()) {
+                        entity.trigger('click', createEventData(x, y, worldPos, null, entity));
+                        break;
+                    }
+                }
+            }
+        });
+        this.engine.on('rightclick', (e) => {
+            if (!this.engine.running) return;
+
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.screenX - rect.left;
+            const y = e.screenY - rect.top;
+            const worldPos = {x: e.worldX, y: e.worldY};
+
+            const entities = Array.from(this.bodies.entries());
+            for (const [entityId, body] of entities) {
+                const entity = body.GetUserData();
+                if (entity && this._isPointInEntity(x, y, entity)) {
+                    if (entity.isInteractive && entity.isInteractive()) {
+                        entity.trigger('rightclick', createEventData(x, y, worldPos, null, entity));
+                        break;
+                    }
+                }
             }
         });
     }
@@ -1147,6 +2064,12 @@ class Physics {
             this.draggedBodies.clear();
             this.bodyTouchMap.clear();
 
+            // Clear interactive tracking
+            this.mouseDownEntity = null;
+            if (this.touchStartEntities) {
+                this.touchStartEntities.clear();
+            }
+
             for (const [entityId, body] of this.bodies) {
                 // Stop moving
                 pixalo.find(entityId).halt();
@@ -1159,6 +2082,18 @@ class Physics {
             this.bodies.clear();
             this.velocities.clear();
             this.materials.clear();
+            this.activeContacts.clear();
+
+            if (this.joints) {
+                for (const [jointId, jointData] of this.joints) {
+                    try {
+                        this.world.DestroyJoint(jointData.joint);
+                    } catch (error) {
+                        // Joint might already be destroyed
+                    }
+                }
+                this.joints.clear();
+            }
 
             // Recreate world with original settings
             this.world = new Box2D.Dynamics.b2World(
@@ -1189,6 +2124,10 @@ class Physics {
 
             // Recreate contact listener
             this._setupContactListener();
+
+            // Reset interactive tracking variables
+            this.mouseDownEntity = null;
+            this.touchStartEntities = new Map();
 
             // Trigger reset event
             if (this.engine && typeof this.engine.trigger === 'function') {

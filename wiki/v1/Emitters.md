@@ -1,16 +1,20 @@
-The Emitters system provides a powerful and flexible particle system for 2D games built with Pixalo engine. It consists of two main classes: `Emitters` (the manager class) and `Emitter` (individual particle emitters). The system includes object pooling for performance optimization, various built-in presets (explosion, fire, smoke), and comprehensive configuration options for creating custom particle effects.
+The Emitters system provides a powerful and flexible particle system for 2D games built with Pixalo engine. It consists
+of two main classes: `Emitters` (the manager class) and `Emitter` (individual particle emitters). The system includes
+object pooling for performance optimization, various built-in presets (explosion, fire, smoke), and comprehensive
+configuration options for creating custom particle effects.
 
 ## Public Methods
 
 ### Emitters Class Methods
 
 ### create(id, config): Emitter
+
 Creates a new particle emitter with the specified configuration.
 
-| Name | Type | Default |
-|------|------|---------|
-| id | string | - |
-| config | object | {} |
+| Name   | Type   | Default |
+|--------|--------|---------|
+| id     | string | -       |
+| config | object | {}      |
 
 **Config Object Structure:**
 ```javascript
@@ -71,54 +75,59 @@ Creates a new particle emitter with the specified configuration.
 ```
 
 **Usage Example:**
+
 ```javascript
 const emitter = game.emitters.create('myEmitter', {
-  position: { x: 100, y: 100 },
-  emission: {
-    type: 'circle',
-    rate: 50,
-    radius: 20
-  },
-  particle: {
-    velocity: {
-      min: { x: -100, y: -100 },
-      max: { x: 100, y: 100 }
+    position: {x: 100, y: 100},
+    emission: {
+        type: 'circle',
+        rate: 50,
+        radius: 20
     },
-    color: {
-      start: '#ff0000',
-      end: '#ffff00'
+    particle: {
+        velocity: {
+            min: {x: -100, y: -100},
+            max: {x: 100, y: 100}
+        },
+        color: {
+            start: '#ff0000',
+            end: '#ffff00'
+        }
     }
-  }
 });
 ```
 
 ---
 
 ### get(id): Emitter | null
+
 Retrieves an existing emitter by its ID.
 
-| Name | Type | Default |
-|------|------|---------|
-| id | string | - |
+| Name | Type   | Default |
+|------|--------|---------|
+| id   | string | -       |
 
 **Usage Example:**
+
 ```javascript
 const emitter = game.emitters.get('myEmitter');
 if (emitter) {
-  emitter.start();
+    emitter.start();
 }
 ```
 
 ---
 
 ### remove(id): boolean
+
 Removes and destroys an emitter by its ID.
 
-| Name | Type | Default |
-|------|------|---------|
-| id | string | - |
+| Name | Type   | Default |
+|------|--------|---------|
+| id   | string | -       |
 
 **Usage Example:**
+
 ```javascript
 const success = game.emitters.remove('myEmitter');
 console.log('Emitter removed:', success);
@@ -127,9 +136,11 @@ console.log('Emitter removed:', success);
 ---
 
 ### getAll(): Array<Emitter>
+
 Returns an array of all active emitters.
 
 **Usage Example:**
+
 ```javascript
 const allEmitters = game.emitters.getAll();
 allEmitters.forEach(emitter => emitter.pause());
@@ -138,9 +149,11 @@ allEmitters.forEach(emitter => emitter.pause());
 ---
 
 ### clear(): void
+
 Removes and destroys all emitters and clears the particle pool.
 
 **Usage Example:**
+
 ```javascript
 game.emitters.clear();
 ```
@@ -148,13 +161,15 @@ game.emitters.clear();
 ---
 
 ### update(deltaTime): void
+
 Updates all active emitters. Called automatically by the engine.
 
-| Name | Type | Default |
-|------|------|---------|
-| deltaTime | number | - |
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| deltaTime | number | -       |
 
 **Usage Example:**
+
 ```javascript
 // Called automatically by engine, but can be called manually
 game.emitters.update(16.67); // 60 FPS
@@ -163,13 +178,15 @@ game.emitters.update(16.67); // 60 FPS
 ---
 
 ### render(ctx): void
+
 Renders all visible emitters. Called automatically by the engine.
 
-| Name | Type | Default |
-|------|------|---------|
-| ctx | CanvasRenderingContext2D | - |
+| Name | Type                     | Default |
+|------|--------------------------|---------|
+| ctx  | CanvasRenderingContext2D | -       |
 
 **Usage Example:**
+
 ```javascript
 // Called automatically by engine, but can be called manually
 game.emitters.render(canvas.getContext('2d'));
@@ -178,81 +195,92 @@ game.emitters.render(canvas.getContext('2d'));
 ---
 
 ### explosion(x, y, options): Emitter
+
 Creates an explosion effect preset at the specified position.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | - |
-| options | object | {} |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| x       | number | -       |
+| y       | number | -       |
+| options | object | {}      |
 
 **Options Object:**
+
 - `particleCount`: number (default: 30)
 - `lifetime`: number (default: 1500)
 - `startColor`: string (default: '#ff4444')
 - `endColor`: string (default: '#ffaa00')
 
 **Usage Example:**
+
 ```javascript
 game.emitters.explosion(200, 150, {
-  particleCount: 50,
-  startColor: '#ff0000',
-  endColor: '#ffff00'
+    particleCount: 50,
+    startColor: '#ff0000',
+    endColor: '#ffff00'
 });
 ```
 
 ---
 
 ### fire(x, y, options): Emitter
+
 Creates a fire effect preset at the specified position.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | - |
-| options | object | {} |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| x       | number | -       |
+| y       | number | -       |
+| options | object | {}      |
 
 **Options Object:**
+
 - `rate`: number (default: 40)
 - `lifetime`: number (default: 1200)
 
 **Usage Example:**
+
 ```javascript
 const fireEmitter = game.emitters.fire(100, 300, {
-  rate: 60,
-  lifetime: 1500
+    rate: 60,
+    lifetime: 1500
 });
 ```
 
 ---
 
 ### smoke(x, y, options): Emitter
+
 Creates a smoke effect preset at the specified position.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | - |
-| options | object | {} |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| x       | number | -       |
+| y       | number | -       |
+| options | object | {}      |
 
 **Options Object:**
+
 - `rate`: number (default: 15)
 - `lifetime`: number (default: 3000)
 
 **Usage Example:**
+
 ```javascript
 const smokeEmitter = game.emitters.smoke(150, 200, {
-  rate: 20,
-  lifetime: 4000
+    rate: 20,
+    lifetime: 4000
 });
 ```
 
 ### Emitter Class Methods
 
 ### start(): Emitter
+
 Starts the emitter particle emission.
 
 **Usage Example:**
+
 ```javascript
 const emitter = game.emitters.create('test', {});
 emitter.start();
@@ -261,9 +289,11 @@ emitter.start();
 ---
 
 ### stop(): Emitter
+
 Stops the emitter particle emission.
 
 **Usage Example:**
+
 ```javascript
 emitter.stop();
 ```
@@ -271,9 +301,11 @@ emitter.stop();
 ---
 
 ### pause(): Emitter
+
 Pauses the emitter particle emission.
 
 **Usage Example:**
+
 ```javascript
 emitter.pause();
 ```
@@ -281,9 +313,11 @@ emitter.pause();
 ---
 
 ### resume(): Emitter
+
 Resumes the emitter particle emission.
 
 **Usage Example:**
+
 ```javascript
 emitter.resume();
 ```
@@ -291,13 +325,15 @@ emitter.resume();
 ---
 
 ### burst(count): Emitter
+
 Emits a specified number of particles instantly.
 
-| Name | Type | Default |
-|------|------|---------|
-| count | number | - |
+| Name  | Type   | Default |
+|-------|--------|---------|
+| count | number | -       |
 
 **Usage Example:**
+
 ```javascript
 emitter.burst(25); // Emit 25 particles instantly
 ```
@@ -305,14 +341,16 @@ emitter.burst(25); // Emit 25 particles instantly
 ---
 
 ### move(x, y): Emitter
+
 Instantly moves the emitter to the specified position.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | - |
+| Name | Type   | Default |
+|------|--------|---------|
+| x    | number | -       |
+| y    | number | -       |
 
 **Usage Example:**
+
 ```javascript
 emitter.move(300, 400);
 ```
@@ -320,32 +358,37 @@ emitter.move(300, 400);
 ---
 
 ### moveTo(x, y, options): Emitter
+
 Animates the emitter to the specified position over time.
 
-| Name | Type | Default |
-|------|------|---------|
-| x | number | - |
-| y | number | - |
-| options | object | {} |
+| Name    | Type   | Default |
+|---------|--------|---------|
+| x       | number | -       |
+| y       | number | -       |
+| options | object | {}      |
 
 **Options Object:**
+
 - `duration`: number (default: 1000) - Animation duration in milliseconds
 - `easing`: string (default: 'linear') - Easing function name
 
 **Usage Example:**
+
 ```javascript
 emitter.moveTo(500, 300, {
-  duration: 2000,
-  easing: 'easeInOut'
+    duration: 2000,
+    easing: 'easeInOut'
 });
 ```
 
 ---
 
 ### destroy(): void
+
 Destroys the emitter and returns all particles to the pool.
 
 **Usage Example:**
+
 ```javascript
 emitter.destroy();
 ```
@@ -353,27 +396,33 @@ emitter.destroy();
 ## Additional Notes
 
 ### Performance Considerations
+
 - The system uses object pooling with a maximum pool size of 1000 particles for optimal performance
 - Particles are automatically returned to the pool when they die to reduce garbage collection
 - Use `autoDestroy: true` for one-time effects like explosions to automatically clean up emitters
 
 ### Emission Types
+
 - **point**: Emits from a single point (emitter position)
 - **circle**: Emits from within or on the edge of a circle
 - **rectangle**: Emits from within or on the edges of a rectangle
 - **line**: Emits along a line between two points
 
 ### Color and Alpha Interpolation
+
 - Colors are interpolated from start to end over the particle's lifetime
 - Supports hex color format (#ffffff)
 - Alpha values are interpolated linearly from start to end values
 
 ### Movement Animation
-- The `moveTo` method supports easing functions from the engine's [Ease](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Ease.md) module
+
+- The `moveTo` method supports easing functions from the
+  engine's [Ease](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Ease.md) module
 - Movement animations can be interrupted by calling `move()` or another `moveTo()`
 - Available easing options depend on the engine's implementation
 
 ### Texture Support
+
 - Particles can use textures by referencing asset IDs
 - If no texture is specified, particles render as colored circles
 - Textures are automatically retrieved from the engine's asset system

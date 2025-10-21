@@ -1,5 +1,3 @@
-# Collision Class Documentation
-
 The Collision class is a comprehensive collision detection system that handles collision detection between various
 geometric shapes including rectangles, circles, triangles, stars, polygons, and custom paths. This class uses advanced
 algorithms like Separating Axis Theorem (SAT) for precise collision detection and supports complex transformations

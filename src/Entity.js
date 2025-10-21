@@ -98,9 +98,10 @@ class Entity {
         this.physics = config.physics ?? false;
 
         this.events = {
-            hoverable: Boolean(config.hoverable),
-            draggable: Boolean(config.draggable),
-            clickable: Boolean(config.clickable)
+            hoverable  : Boolean(config.hoverable),
+            draggable  : Boolean(config.draggable),
+            clickable  : Boolean(config.clickable),
+            interactive: Boolean(config.interactive)
         };
 
         this.eventListeners  = new Map();
@@ -197,15 +198,10 @@ class Entity {
     }
     /** ======== END ======== */
 
-    isHoverable () {
-        return this.events.hoverable;
-    }
-    isDraggable () {
-        return this.events.draggable;
-    }
-    isClickable () {
-        return this.events.clickable;
-    }
+    isHoverable () {return this.events.hoverable}
+    isDraggable () {return this.events.draggable}
+    isClickable () {return this.events.clickable}
+    isInteractive () {return this.events.interactive}
 
     /** ======== ENTITIES ======== */
     append (childId, config = {}) {

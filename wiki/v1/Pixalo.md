@@ -1,5 +1,3 @@
-# Pixalo Class Documentation
-
 The `Pixalo` class serves as the core engine and primary entry point for all game development operations.
 
 ## Overview
@@ -835,6 +833,31 @@ if (game.isKeyPressed('space')) shooting();
 const movingLeft = game.isKeyPressed('left', 'a');
 player.style('flipX', movingLeft);
 ```
+
+### `isLogicalKeyPressed(...keys)`: Boolean
+
+Returns `true` if **any** of the given logical keys are currently pressed; otherwise `false`. Logical keys are based on the actual characters typed according to the current keyboard language.
+
+| Name | Type      | Default |
+|------|-----------|---------|
+| keys | ...String | —       |
+
+**Usage Examples:**
+
+```javascript
+// single logical key
+if (game.isLogicalKeyPressed('ق')) console.log('Persian Q pressed');
+
+// multiple logical keys (OR logic)
+const typingHello = game.isLogicalKeyPressed('h', 'ه');
+if (typingHello) startTyping();
+
+// mixed language support
+const confirmAction = game.isLogicalKeyPressed('y', 'ی', 'yes');
+if (confirmAction) executeAction();
+```
+
+**Note:** Use `isKeyPressed()` for game controls (always consistent), and `isLogicalKeyPressed()` for text input or language-specific features.
 
 ---
 

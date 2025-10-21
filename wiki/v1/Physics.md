@@ -1,14 +1,7 @@
-# Physics Class Documentation
-
-The Physics class provides comprehensive 2D physics simulation using Box2D engine. It handles physics bodies, collision
-detection, drag & drop interactions, materials, and various physics forces. The class integrates seamlessly with the
-Pixalo game engine to provide realistic physics behavior for game entities.
+The Physics class provides comprehensive 2D physics simulation using Box2D engine. It handles physics bodies, collision detection, drag & drop interactions, materials, joints, and various physics forces. The class integrates seamlessly with the Pixalo game engine to provide realistic physics behavior for game entities.
 
 > [!WARNING]
-> When Physics is enabled, you cannot use the features of
-> the [Collision class](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Collision.md), and
-> all [Collision class](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Collision.md) commands in the Pixalo engine are disabled. This
-> is because the Physics class exclusively handles all collision calculations and sends the results to you.
+> When Physics is enabled, you cannot use the features of the [Collision class](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Collision.md), and all [Collision class](https://github.com/pixalo/pixalo/tree/main/wiki/v1/Collision.md) commands in the Pixalo engine are disabled. This is because the Physics class exclusively handles all collision calculations and sends the results to you.
 
 ## Configuration Object
 
@@ -16,7 +9,7 @@ Pixalo game engine to provide realistic physics behavior for game entities.
 const config = {
     // Scaling and Quality
     scale: 30,                    // Base scale for physics world (pixels per meter)
-    quality: 1,                   // Quality multiplier for precision
+    quality: 1,                   // Quality multiplier for precision, Pixalo engine automatically adjusts quality
 
     // Gravity
     gravity: {
@@ -48,25 +41,7 @@ const config = {
 }
 ```
 
-## Public Methods
-
-### `update(deltaTime): void`
-
-Updates the physics simulation by one step. Called automatically by the game loop.
-
-> [!NOTE]
-> This method is automatically called in the Pixalo class. You don't need to call this method unless you want to do
-> customization elsewhere.
-
-| Name      | Type   | Default |
-|-----------|--------|---------|
-| deltaTime | number | -       |
-
-**Usage Example:**
-
-```javascript
-game.physics.update(16.67); // 60 FPS
-```
+## Entity Management
 
 ### `hasEntity(entity): boolean`
 
@@ -87,8 +62,7 @@ const exists = game.physics.hasEntity(myEntity);
 Adds an entity to the physics world and creates a physics body for it.
 
 > [!NOTE]
-> This function is automatically called when you add an entity to your game world, so you don't need to call it
-> manually—unless you want to use it for customization purposes.
+> This function is automatically called when you add an entity to your game world, so you don't need to call it manually—unless you want to use it for customization purposes.
 
 | Name   | Type   | Default |
 |--------|--------|---------|
@@ -106,6 +80,9 @@ Adds an entity to the physics world and creates a physics body for it.
 - `fixedRotation`: boolean (prevents rotation)
 - `angularDamping`: number (angular resistance)
 - `linearDamping`: number (linear resistance)
+- `gravityScale`: number (0 = weightless, negative = anti-gravity)
+- `bullet`: boolean (continuous collision detection for fast-moving objects)
+- `sleeping`: boolean (allow body to sleep when inactive)
 - `collision`: Object with `categoryBits`, `maskBits`, `groupIndex`
 
 **Usage Example:**
@@ -116,6 +93,8 @@ const body = game.physics.addEntity(myEntity, {
     density: 2,
     friction: 0.5,
     sensor: false,
+    gravityScale: 1.5,
+    bullet: true,
     collision: {
         categoryBits: 0x0001,
         maskBits: 0xFFFF
@@ -189,6 +168,8 @@ game.physics.moveEntity({
 });
 ```
 
+## Shape Management
+
 ### `updateShape(entity): Physics`
 
 Updates the physics shape of an entity based on its current properties.
@@ -203,6 +184,8 @@ Updates the physics shape of an entity based on its current properties.
 game.physics.updateShape(myEntity);
 ```
 
+## Material System
+
 ### `createMaterial(name, properties): Physics`
 
 Creates a named material with specific physics properties.
@@ -214,17 +197,33 @@ Creates a named material with specific physics properties.
 
 **Properties Object:**
 
-- `friction`: number
-- `restitution`: number
-- `density`: number
+- `bodyType`: 'dynamic' | 'static' | 'kinematic' - Body type
+- `density`: number - Mass per unit area
+- `friction`: number - Surface friction coefficient (0-1)
+- `restitution`: number - Bounce coefficient (0-1)
+- `linearDamping`: number - Linear velocity damping
+- `angularDamping`: number - Angular velocity damping
+- `fixedRotation`: boolean - Prevent rotation
+- `gravityScale`: number - Gravity multiplier (0 = weightless, negative = anti-gravity)
+- `bullet`: boolean - Continuous collision detection
+- `sleeping`: boolean - Allow sleeping when inactive
+- `categoryBits`: number - Collision category
+- `maskBits`: number - Collision mask
+- `groupIndex`: number - Collision group
 
 **Usage Example:**
 
 ```javascript
 game.physics.createMaterial('ice', {
-    friction: 0.1,
-    restitution: 0.2,
-    density: 0.5
+    bodyType: 'dynamic',
+    friction: 0.05,
+    restitution: 0.1,
+    density: 0.9,
+    linearDamping: 0.05,
+    angularDamping: 0.5,
+    gravityScale: 0.8,
+    categoryBits: 0x0002,
+    maskBits: 0xFFFF
 });
 ```
 
@@ -241,6 +240,25 @@ Retrieves a material by name.
 ```javascript
 const iceMaterial = game.physics.getMaterial('ice');
 ```
+
+## Collision Detection
+
+### `isTouching(entityA, entityB): boolean`
+
+Checks if two entities are currently colliding.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| entityA | Object | -       |
+| entityB | Object | -       |
+
+**Usage Example:**
+
+```javascript
+const touching = game.physics.isTouching(player, platform);
+```
+
+## Force and Motion
 
 ### `setGravity(x, y): Physics`
 
@@ -327,21 +345,6 @@ Instantly moves and/or rotates a physics body to the specified transform.
 game.physics.setTransform(myEntity, {x: 100, y: 200, rotation: 45});
 ```
 
-### `getBodyVelocity(entity): Object`
-
-Returns the current velocity of an entity.
-
-| Name   | Type           | Default |
-|--------|----------------|---------|
-| entity | Object\|string | -       |
-
-**Usage Example:**
-
-```javascript
-const velocity = game.physics.getBodyVelocity(myEntity);
-console.log(velocity.x, velocity.y);
-```
-
 ### `setAngularVelocity(entity, omega): Physics`
 
 Sets the angular velocity (rotation speed) of an entity.
@@ -388,6 +391,8 @@ Applies an instantaneous impulse to an entity.
 game.physics.applyImpulse(myEntity, {x: 5, y: -3});
 game.physics.applyImpulse(myEntity, {x: 5, y: -3}, {x: 10, y: 20});
 ```
+
+## Body Control
 
 ### `setBodyType(entity, type): Physics`
 
@@ -506,16 +511,522 @@ Gradually slows down a physics body using damping.
 game.physics.brakeBody(myEntity, 0.95, 0.1);
 ```
 
+### Sensor Control
+
+### `toggleSensor(entity, turnOn): Physics`
+
+Toggles sensor mode for an entity.
+
+| Name   | Type    | Default |
+|--------|---------|---------|
+| entity | Object  | -       |
+| turnOn | boolean | true    |
+
+**Usage Example:**
+
+```javascript
+game.physics.toggleSensor(myEntity, true); // Enable sensor
+```
+
+### `enableSensor(entity): Physics`
+
+Enables sensor mode for an entity (no physical collision, but detects overlaps).
+
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
+
+**Usage Example:**
+
+```javascript
+game.physics.enableSensor(myEntity);
+```
+
+### `disableSensor(entity): Physics`
+
+Disables sensor mode for an entity (restores physical collision).
+
+| Name   | Type   | Default |
+|--------|--------|---------|
+| entity | Object | -       |
+
+**Usage Example:**
+
+```javascript
+game.physics.disableSensor(myEntity);
+```
+
+## Information Retrieval
+
+### `getBodyVelocity(entity): Object`
+
+Returns the current velocity of an entity.
+
+| Name   | Type           | Default |
+|--------|----------------|---------|
+| entity | Object\|string | -       |
+
+**Usage Example:**
+
+```javascript
+const velocity = game.physics.getBodyVelocity(myEntity);
+console.log(velocity.x, velocity.y);
+```
+
+### `getBodySpeed(entity): number`
+
+Returns the current speed (magnitude of velocity) of an entity.
+
+| Name   | Type           | Default |
+|--------|----------------|---------|
+| entity | Object\|string | -       |
+
+**Usage Example:**
+
+```javascript
+const speed = game.physics.getBodySpeed(myEntity);
+```
+
+## Joint System
+
+### `joint(entityA, entityB, config): string`
+
+Creates a joint between two entities and returns a unique joint ID.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| entityA | Object | -       |
+| entityB | Object | -       |
+| config  | Object | {}      |
+
+**Config Object:**
+
+- `type`: string - Joint type ('revolute', 'distance', 'prismatic', 'weld', 'rope', 'pulley', 'gear', 'friction')
+- `anchor`: Object {x, y} - Anchor point for joint
+- `anchorA`: Object {x, y} - Anchor point on entity A
+- `anchorB`: Object {x, y} - Anchor point on entity B
+- `collideConnected`: boolean - Whether connected bodies can collide
+- `motor`: Object - Motor settings (speed, torque/force)
+- `limits`: Object - Joint limits (lower, upper)
+- Additional type-specific properties
+
+**Usage Example:**
+
+```javascript
+const jointId = game.physics.joint(boxA, boxB, {
+    type: 'revolute',
+    anchor: {x: 100, y: 100},
+    motor: {speed: 45, torque: 1000},
+    limits: {lower: -90, upper: 90},
+    collideConnected: false
+});
+```
+
+### `getJoint(jointId): Object`
+
+Retrieves joint data by ID.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+
+**Usage Example:**
+
+```javascript
+const jointData = game.physics.getJoint(jointId);
+```
+
+### `getAllJoints(): Array`
+
+Returns an array of all joints with their IDs and data.
+
+**Usage Example:**
+
+```javascript
+const allJoints = game.physics.getAllJoints();
+```
+
+### Joint Control Methods
+
+### `updateJointMotor(jointId, speed, torqueOrForce): Physics`
+
+Updates the motor settings of a joint.
+
+| Name          | Type   | Default |
+|---------------|--------|---------|
+| jointId       | string | -       |
+| speed         | number | -       |
+| torqueOrForce | number | -       |
+
+**Usage Example:**
+
+```javascript
+game.physics.updateJointMotor(jointId, 90, 2000);
+```
+
+### `enableJointMotor(jointId, enable): Physics`
+
+Enables or disables a joint's motor.
+
+| Name    | Type    | Default |
+|---------|---------|---------|
+| jointId | string  | -       |
+| enable  | boolean | true    |
+
+**Usage Example:**
+
+```javascript
+game.physics.enableJointMotor(jointId, true);
+```
+
+### `setJointLimits(jointId, lower, upper): Physics`
+
+Sets the limits for a joint.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+| lower   | number | -       |
+| upper   | number | -       |
+
+**Usage Example:**
+
+```javascript
+game.physics.setJointLimits(jointId, -45, 45);
+```
+
+### `enableJointLimits(jointId, enable): Physics`
+
+Enables or disables joint limits.
+
+| Name    | Type    | Default |
+|---------|---------|---------|
+| jointId | string  | -       |
+| enable  | boolean | true    |
+
+**Usage Example:**
+
+```javascript
+game.physics.enableJointLimits(jointId, true);
+```
+
+### Joint Information Methods
+
+### `getJointReactionForce(jointId, invDt): Object`
+
+Gets the reaction force of a joint.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+| invDt   | number | 60      |
+
+**Usage Example:**
+
+```javascript
+const force = game.physics.getJointReactionForce(jointId);
+console.log(force.x, force.y, force.magnitude);
+```
+
+### `getJointReactionTorque(jointId, invDt): number`
+
+Gets the reaction torque of a joint.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+| invDt   | number | 60      |
+
+**Usage Example:**
+
+```javascript
+const torque = game.physics.getJointReactionTorque(jointId);
+```
+
+### `getJointAngle(jointId): number`
+
+Gets the current angle of a revolute joint in degrees.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+
+**Usage Example:**
+
+```javascript
+const angle = game.physics.getJointAngle(jointId);
+```
+
+### `getJointSpeed(jointId): number`
+
+Gets the current speed of a joint.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+
+**Usage Example:**
+
+```javascript
+const speed = game.physics.getJointSpeed(jointId);
+```
+
+### `getJointTranslation(jointId): number`
+
+Gets the current translation of a prismatic joint in pixels.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+
+**Usage Example:**
+
+```javascript
+const translation = game.physics.getJointTranslation(jointId);
+```
+
+### `isJointLimitEnabled(jointId): boolean`
+
+Checks if joint limits are enabled.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+
+**Usage Example:**
+
+```javascript
+const hasLimits = game.physics.isJointLimitEnabled(jointId);
+```
+
+### `isJointMotorEnabled(jointId): boolean`
+
+Checks if joint motor is enabled.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+
+**Usage Example:**
+
+```javascript
+const hasMotor = game.physics.isJointMotorEnabled(jointId);
+```
+
+### Joint Helper Methods
+
+### `createHinge(entityA, entityB, options): string`
+
+Creates a revolute joint (hinge) between two entities.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| entityA | Object | -       |
+| entityB | Object | -       |
+| options | Object | {}      |
+
+**Usage Example:**
+
+```javascript
+const hingeId = game.physics.createHinge(door, wall, {
+    anchor: {x: 50, y: 100},
+    limits: {lower: -90, upper: 0}
+});
+```
+
+### `createSpring(entityA, entityB, options): string`
+
+Creates a distance joint (spring) between two entities.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| entityA | Object | -       |
+| entityB | Object | -       |
+| options | Object | {}      |
+
+**Options:**
+- `anchorA`: Object {x, y} - Anchor point on entity A
+- `anchorB`: Object {x, y} - Anchor point on entity B
+- `length`: number - Rest length of spring
+- `stiffness`: number - Spring stiffness (frequency)
+- `damping`: number - Spring damping ratio
+- `collideConnected`: boolean
+
+**Usage Example:**
+
+```javascript
+const springId = game.physics.createSpring(weight, ceiling, {
+    length: 100,
+    stiffness: 8.0,
+    damping: 0.3
+});
+```
+
+### `createSlider(entityA, entityB, options): string`
+
+Creates a prismatic joint (slider) between two entities.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| entityA | Object | -       |
+| entityB | Object | -       |
+| options | Object | {}      |
+
+**Options:**
+- `anchor`: Object {x, y} - Anchor point
+- `axis`: Object {x, y} - Slide direction (default: {x: 1, y: 0})
+- `motor`: Object - Motor settings
+- `limits`: Object - Translation limits
+- `collideConnected`: boolean
+
+**Usage Example:**
+
+```javascript
+const sliderId = game.physics.createSlider(piston, cylinder, {
+    axis: {x: 0, y: 1}, // Vertical sliding
+    limits: {lower: -50, upper: 50},
+    motor: {speed: 10, force: 1000}
+});
+```
+
+### `createChain(entities, options): Array`
+
+Creates a chain of joints connecting multiple entities.
+
+| Name     | Type  | Default |
+|----------|-------|---------|
+| entities | Array | -       |
+| options  | Object| {}      |
+
+**Options:**
+- `type`: string - Joint type for chain links
+- `spacing`: number - Distance between connection points
+- `jointConfig`: Object - Additional joint configuration
+- `collideConnected`: boolean
+
+**Usage Example:**
+
+```javascript
+const chainJoints = game.physics.createChain([link1, link2, link3, link4], {
+    type: 'revolute',
+    spacing: 0,
+    collideConnected: false
+});
+```
+
+### `createRope(entities, options): Array`
+
+Creates a rope using distance joints between multiple entities.
+
+| Name     | Type   | Default |
+|----------|--------|---------|
+| entities | Array  | -       |
+| options  | Object | {}      |
+
+**Options:**
+- `flexibility`: number - Rope flexibility (frequency)
+- `damping`: number - Rope damping
+- `spacing`: number - Distance between segments
+- `jointConfig`: Object - Additional joint configuration
+
+**Usage Example:**
+
+```javascript
+const ropeJoints = game.physics.createRope([segment1, segment2, segment3], {
+    flexibility: 2.0,
+    damping: 0.3,
+    spacing: 20
+});
+```
+
+### Joint Management
+
+### `destroyJoint(jointId): boolean`
+
+Destroys a joint by its ID.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+
+**Usage Example:**
+
+```javascript
+game.physics.destroyJoint(jointId);
+```
+
+### `destroyAllJoints(): Physics`
+
+Destroys all joints in the physics world.
+
+**Usage Example:**
+
+```javascript
+game.physics.destroyAllJoints();
+```
+
+### `monitorJointStress(jointId, maxForce, maxTorque, callback): Physics`
+
+Monitors joint stress and calls callback when limits are exceeded.
+
+| Name      | Type     | Default |
+|-----------|----------|---------|
+| jointId   | string   | -       |
+| maxForce  | number   | -       |
+| maxTorque | number   | -       |
+| callback  | function | -       |
+
+**Usage Example:**
+
+```javascript
+game.physics.monitorJointStress(jointId, 1000, 500, (stressData) => {
+    if (stressData.forceExceeded) {
+        console.log('Joint under too much force!');
+        game.physics.destroyJoint(jointId);
+    }
+});
+```
+
+### `debugJoint(jointId, options): Object`
+
+Returns detailed debugging information about a joint.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+| options | Object | {}      |
+
+**Options:**
+- `log`: boolean - Whether to console.log the information (default: true)
+
+**Usage Example:**
+
+```javascript
+const debugInfo = game.physics.debugJoint(jointId);
+```
+
+## System Management
+
+### `update(deltaTime): void`
+
+Updates the physics simulation by one step. Called automatically by the game loop.
+
+> [!NOTE]
+> This method is automatically called in the Pixalo class. You don't need to call this method unless you want to do customization elsewhere.
+
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| deltaTime | number | -       |
+
+**Usage Example:**
+
+```javascript
+game.physics.update(16.67); // 60 FPS
+```
+
 ### `reset(): Physics`
 
-Completely clears the physics world and returns it to its original state.
-All bodies, joints, drag, and velocities are lost; the world is recreated with the original default gravity, scale,
-quality, and materials.
-An engine-level `physicsReset` event is fired on success.
-
-| Name   | –    |
-|--------|------|
-| Params | none |
+Completely clears the physics world and returns it to its original state. All bodies, joints, drag, and velocities are lost; the world is recreated with the original default gravity, scale, quality, and materials. An engine-level `physicsReset` event is fired on success.
 
 **Returns:**  
 `PhysicsInstance` – Self for chaining on success.  
@@ -567,8 +1078,7 @@ const myEntity = game.append({
 ```
 
 > [!NOTE]
-> Polygon points should be defined relative to the entity's center and in counter-clockwise order for proper collision
-> detection.
+> Polygon points should be defined relative to the entity's center and in counter-clockwise order for proper collision detection.
 
 ## Collision Detection
 
@@ -579,19 +1089,6 @@ The physics system automatically determines which sides of entities are involved
 - `'top'`, `'bottom'`, `'left'`, `'right'` for normal collisions
 - For sensor bodies, collision sides are calculated based on entity positions
 
-### Collision Filtering
-
-Control which entities can collide with each other using bit masks:
-
-```javascript
-game.physics.addEntity(myEntity, {
-    collision: {
-        categoryBits: 0x0001,    // What category this body belongs to
-        maskBits: 0xFFFF,        // What categories this body can collide with
-        groupIndex: 0            // Collision group (negative = never collide, positive = always collide)
-    }
-});
-```
 
 ## Drag & Drop System
 
@@ -607,7 +1104,8 @@ const draggableEntity = game.append({
     events: {
         draggable: true,    // Enable drag & drop
         hoverable: true,    // Enable hover events
-        clickable: true     // Enable click/tap events
+        clickable: true,    // Enable click/tap events
+        interactive: true   // Enable mouse/touch events
     }
 });
 ```
@@ -662,6 +1160,32 @@ const config = {
 - `timestamp` *(Number)* – Milliseconds since epoch when the reset occurred
 - `config` *(Object)* – The original physics configuration object that was reapplied
 
+**`jointCreated`** - Triggered on `game.on('jointCreated')` when a joint is created
+
+- `jointId`: Unique identifier for the joint
+- `entityA`: First entity in joint
+- `entityB`: Second entity in joint
+- `type`: Joint type
+- `joint`: Box2D joint object
+
+**`jointDestroyed`** - Triggered on `game.on('jointDestroyed')` when a joint is destroyed
+
+- `jointId`: Joint identifier
+- `entityA`: First entity in joint
+- `entityB`: Second entity in joint
+- `type`: Joint type
+
+**`chainCreated`** - Triggered on `game.on('chainCreated')` when a chain is created
+
+- `entities`: Array of entities in chain
+- `joints`: Array of joint IDs created
+- `options`: Chain configuration options
+
+**`jointsBreak`** - Triggered on `game.on('jointsBreak')` when joints are broken for an entity
+
+- `entity`: Entity whose joints were broken
+- `brokenJoints`: Array of broken joint IDs
+
 ### Entity Events
 
 **`collide`** - Triggered on `entity.on('collide')` when collision starts
@@ -705,6 +1229,7 @@ const config = {
 - `identifier`: Drag identifier
 - `target`: The dragged entity
 - `timestamp`: Event timestamp
+- `which`: Mouse button (for mouse events only)
 
 **`drop`** - Triggered on `entity.on('drop')` when drag ends
 
@@ -717,6 +1242,7 @@ const config = {
 - `identifier`: Drag identifier
 - `target`: The dropped entity
 - `timestamp`: Event timestamp
+- `which`: Mouse button (for mouse events only)
 
 **`hover`** - Triggered on `entity.on('hover')` when mouse/touch enters entity (requires `hoverable: true`)
 
@@ -740,7 +1266,82 @@ const config = {
 - `target`: The entity being left
 - `timestamp`: Event timestamp
 
-**`click`** - Triggered on `entity.on('click')` on touch/click (requires `clickable: true`)
+**`mousedown`** - Triggered on `entity.on('mousedown')` when mouse button is pressed on entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Always 'mouse'
+- `target`: The clicked entity
+- `which`: Mouse button number
+- `timestamp`: Event timestamp
+
+**`mouseup`** - Triggered on `entity.on('mouseup')` when mouse button is released on entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Always 'mouse'
+- `target`: The clicked entity
+- `which`: Mouse button number
+- `timestamp`: Event timestamp
+
+**`mousemove`** - Triggered on `entity.on('mousemove')` when mouse moves over entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Always 'mouse'
+- `target`: The entity under mouse
+- `which`: Mouse button number
+- `timestamp`: Event timestamp
+
+**`touchstart`** - Triggered on `entity.on('touchstart')` when touch begins on entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Touch ID number
+- `target`: The touched entity
+- `timestamp`: Event timestamp
+
+**`touchend`** - Triggered on `entity.on('touchend')` when touch ends on entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Touch ID number
+- `target`: The touched entity
+- `timestamp`: Event timestamp
+
+**`touchmove`** - Triggered on `entity.on('touchmove')` when touch moves over entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `identifier`: Touch ID number
+- `target`: The entity under touch
+- `timestamp`: Event timestamp
+
+**`click`** - Triggered on `entity.on('click')` when entity is clicked/tapped (requires `clickable: true` or `isInteractive()` to return true)
 
 - `x`: World X coordinate
 - `y`: World Y coordinate
@@ -751,6 +1352,32 @@ const config = {
 - `target`: The clicked entity
 - `timestamp`: Event timestamp
 
+**`rightclick`** - Triggered on `entity.on('rightclick')` when entity is right-clicked (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `target`: The right-clicked entity
+- `timestamp`: Event timestamp
+
+**`wheel`** - Triggered on `entity.on('wheel')` when mouse wheel is used over entity (requires `isInteractive()` to return true)
+
+- `x`: World X coordinate
+- `y`: World Y coordinate
+- `worldX`: World X coordinate
+- `worldY`: World Y coordinate
+- `screenX`: Screen X coordinate
+- `screenY`: Screen Y coordinate
+- `target`: The entity under mouse
+- `deltaX`: Horizontal scroll amount
+- `deltaY`: Vertical scroll amount
+- `deltaZ`: Z-axis scroll amount
+- `deltaMode`: Delta mode indicator
+- `timestamp`: Event timestamp
+
 ## Best Practices
 
 ### Performance Optimization
@@ -759,403 +1386,41 @@ const config = {
 - Set appropriate `velocityIterations` and `positionIterations` based on your needs
 - Use static bodies for immovable objects like walls and platforms
 - Limit the number of active dynamic bodies in complex scenes
+- Destroy unused joints to free up memory
+- Use sensor bodies instead of full collision detection for trigger zones
 
 ### Collision Optimization
 
 - Use collision filtering to reduce unnecessary collision checks
 - Consider using sensor bodies for trigger zones instead of full collision detection
 - Group similar entities using `groupIndex` for better performance
+- Avoid creating too many small bodies in close proximity
 
-### Scale and Quality
+### Scale
 
 - Choose an appropriate `scale` value (30 is recommended for most games)
-- Increase `quality` for higher precision but expect performance impact
 - Keep entity sizes reasonable relative to your scale (avoid very small or very large entities)
+- Test different scale values to find the optimal balance for your game
 
-### Material Management
+### Joint Management
 
-```javascript
-// Create reusable materials for common surface types
-game.physics.createMaterial('bouncy', {
-    friction: 0.1,
-    restitution: 0.9,
-    density: 0.5
-});
+- Destroy joints when they're no longer needed
+- Monitor joint stress to prevent unrealistic forces
+- Use appropriate joint types for different mechanical behaviors
+- Limit the number of joints per entity for better performance
 
-game.physics.createMaterial('sticky', {
-    friction: 1.0,
-    restitution: 0.1,
-    density: 1.5
-});
+### Drag & Drop Optimization
 
-// Apply materials to entities
-game.physics.addEntity(ball, {material: 'bouncy'});
-game.physics.addEntity(platform, {material: 'sticky'});
-```
+- Use `fixedRotation: true` in drag config for UI elements
+- Adjust `linearDamping` and `angularDamping` for different drag feels
+- Implement velocity-based throwing for natural drag-and-throw mechanics
+- Consider performance impact of many draggable entities
 
 ### Error Handling
 
-The Physics class includes built-in error handling and will gracefully fallback to simpler shapes if complex polygons
-fail to create. Monitor console warnings for potential issues with polygon definitions.
-
-## Advanced Features
-
-### Body Type Management
-
-The Physics class provides dynamic body type switching for advanced gameplay mechanics:
-
-```javascript
-// Switch a dynamic platform to static when player stands on it
-player.on('collide', (data) => {
-    if (data.target === platform && data.side === 'bottom') {
-        game.physics.setBodyType(platform, 'static');
-    }
-});
-
-// Make a static wall kinematic for moving platforms
-game.physics.setBodyType(movingWall, 'kinematic');
-game.physics.setVelocity(movingWall, {x: 2, y: 0});
-```
-
-### Sensor Bodies
-
-Create trigger zones and detection areas using sensor bodies:
-
-```javascript
-const triggerZone = game.append({
-    x: 100, y: 100,
-    width: 50, height: 50,
-    shape: 'rectangle',
-    fill : 'transparent'
-});
-
-game.physics.addEntity(triggerZone, {
-    bodyType: 'static',
-    sensor: true  // No physical collision, but detects overlaps
-});
-
-triggerZone.on('collide', (data) => {
-    console.log('Player entered trigger zone!');
-});
-```
-
-### Force and Impulse Systems
-
-#### Continuous Forces
-
-Use `applyForce()` for continuous effects like wind, magnetism, or thrusters:
-
-```javascript
-// Wind effect pushing entities to the right
-game.timer(() => {
-    entities.forEach(entity => {
-        if (game.physics.hasEntity(entity)) {
-            game.physics.applyForce(entity, {x: 10, y: 0});
-        }
-    });
-}, 16); // Apply every frame
-```
-
-#### Instant Impulses
-
-Use `applyImpulse()` for immediate velocity changes like jumps or explosions:
-
-```javascript
-// Jump mechanics
-game.on('keydown', (e) => {
-    if (e.key === 'Space') {
-        game.physics.applyImpulse(player, {x: 0, y: -15});
-    }
-});
-
-// Explosion effect
-function explode (center, radius, force) {
-    entities.forEach(entity => {
-        const dx = entity.x - center.x;
-        const dy = entity.y - center.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance < radius) {
-            const normalizedX = dx / distance;
-            const normalizedY = dy / distance;
-            const impulse = force * (1 - distance / radius);
-
-            game.physics.applyImpulse(entity, {
-                x: normalizedX * impulse,
-                y: normalizedY * impulse
-            });
-        }
-    });
-}
-```
-
-### Advanced Movement Patterns
-
-#### Smooth Entity Animation
-
-```javascript
-// Move entity with easing and callbacks
-game.physics.moveEntity({
-    entity: player,
-    x: 300,
-    y: 200,
-    duration: 2000,
-    easing: 'easeInOutQuad',
-    onUpdate: (entity, progress) => {
-        // Change opacity during movement
-        entity.style({alpha: 0.5 + (progress * 0.5)});
-    },
-    onComplete: (entity) => {
-        console.log('Movement complete!');
-        entity.style({alpha: 1});
-    }
-});
-```
-
-### Material System Advanced Usage
-
-#### Dynamic Material Switching
-
-```javascript
-// Create multiple surface materials
-game.physics.createMaterial('ice', {
-    friction: 0.05,
-    restitution: 0.1,
-    density: 0.9
-});
-
-game.physics.createMaterial('rubber', {
-    friction: 0.8,
-    restitution: 0.95,
-    density: 0.7
-});
-
-game.physics.createMaterial('metal', {
-    friction: 0.3,
-    restitution: 0.2,
-    density: 2.0
-});
-
-// Switch materials based on game state
-function changeEnvironment (materialName) {
-    platforms.forEach(platform => {
-        const material = game.physics.getMaterial(materialName);
-        game.physics.setBodyProperties(platform, material);
-    });
-}
-```
-
-### Collision Groups and Filtering
-
-#### Advanced Collision Filtering
-
-```javascript
-// Define collision categories
-const CATEGORY = {
-    PLAYER: 0x0001,
-    ENEMY: 0x0002,
-    PROJECTILE: 0x0004,
-    WALL: 0x0008,
-    PICKUP: 0x0010
-};
-
-// Player setup - collides with enemies, walls, and pickups but not projectiles
-game.physics.addEntity(player, {
-    collision: {
-        categoryBits: CATEGORY.PLAYER,
-        maskBits: CATEGORY.ENEMY | CATEGORY.WALL | CATEGORY.PICKUP
-    }
-});
-
-// Enemy projectile - collides only with player and walls
-game.physics.addEntity(bullet, {
-    collision: {
-        categoryBits: CATEGORY.PROJECTILE,
-        maskBits: CATEGORY.PLAYER | CATEGORY.WALL
-    }
-});
-
-// Pickup item - sensor that only detects player
-game.physics.addEntity(coin, {
-    sensor: true,
-    collision: {
-        categoryBits: CATEGORY.PICKUP,
-        maskBits: CATEGORY.PLAYER
-    }
-});
-```
-
-### Multi-Touch and Complex Interactions
-
-#### Advanced Drag Handling
-
-```javascript
-// Track multiple simultaneous drags
-const activeDrags = new Map();
-
-entity.on('drag', (data) => {
-    activeDrags.set(data.identifier, {
-        entity: data.target,
-        startPos: {x: data.x, y: data.y},
-        startTime: data.timestamp
-    });
-});
-
-entity.on('drop', (data) => {
-    const dragData = activeDrags.get(data.identifier);
-    if (dragData) {
-        const duration = data.timestamp - dragData.startTime;
-        const distance = Math.sqrt(
-            Math.pow(data.x - dragData.startPos.x, 2) +
-            Math.pow(data.y - dragData.startPos.y, 2)
-        );
-
-        // Apply throw velocity based on drag speed
-        if (duration < 300 && distance > 20) {
-            const velocityX = (data.x - dragData.startPos.x) / duration * 10;
-            const velocityY = (data.y - dragData.startPos.y) / duration * 10;
-            game.physics.setVelocity(data.target, {x: velocityX, y: velocityY});
-        }
-    }
-
-    activeDrags.delete(data.identifier);
-});
-```
-
-### Performance Monitoring and Optimization
-
-#### Physics Performance Tracking
-
-```javascript
-class PhysicsProfiler {
-    constructor (physics) {
-        this.physics = physics;
-        this.metrics = {
-            bodyCount: 0,
-            activeBodyCount: 0,
-            collisionCount: 0,
-            updateTime: 0
-        };
-    }
-
-    update () {
-        const startTime = performance.now();
-
-        // Count bodies
-        this.metrics.bodyCount = this.physics.bodies.size;
-        this.metrics.activeBodyCount = 0;
-
-        for (const [id, body] of this.physics.bodies) {
-            if (body.IsAwake()) {
-                this.metrics.activeBodyCount++;
-            }
-        }
-
-        this.metrics.updateTime = performance.now() - startTime;
-    }
-
-    getReport () {
-        return {
-            ...this.metrics,
-            memoryUsage: this.physics.bodies.size + this.physics.velocities.size + this.physics.materials.size
-        };
-    }
-}
-
-// Usage
-const profiler = new PhysicsProfiler(game.physics);
-setInterval(() => {
-    profiler.update();
-    console.log(profiler.getReport());
-}, 1000);
-```
-
-### Custom Physics Behaviors
-
-#### Gravity Wells
-
-```javascript
-function createGravityWell (center, radius, strength) {
-    return {
-        update () {
-            for (const [entityId, body] of game.physics.bodies) {
-                const entity = body.GetUserData();
-                if (!entity) continue;
-
-                const dx = center.x - entity.x;
-                const dy = center.y - entity.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < radius && distance > 0) {
-                    const force = strength / (distance * distance);
-                    const normalizedX = dx / distance;
-                    const normalizedY = dy / distance;
-
-                    game.physics.applyForce(entity, {
-                        x: normalizedX * force,
-                        y: normalizedY * force
-                    });
-                }
-            }
-        }
-    };
-}
-
-// Create and use gravity well
-const blackHole = createGravityWell({x: 400, y: 300}, 200, 50000);
-game.on('update', () => blackHole.update());
-```
-
-#### Magnetic Fields
-
-```javascript
-function createMagneticField (entities, strength = 100) {
-    entities.forEach((entityA, indexA) => {
-        entities.forEach((entityB, indexB) => {
-            if (indexA >= indexB) return;
-
-            const dx = entityB.x - entityA.x;
-            const dy = entityB.y - entityA.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance > 0) {
-                const force = strength / distance;
-                const normalizedX = dx / distance;
-                const normalizedY = dy / distance;
-
-                // Attract or repel based on entity properties
-                const multiplier = (entityA.magnetic === entityB.magnetic) ? -1 : 1;
-
-                game.physics.applyForce(entityA, {
-                    x: normalizedX * force * multiplier,
-                    y: normalizedY * force * multiplier
-                });
-
-                game.physics.applyForce(entityB, {
-                    x: -normalizedX * force * multiplier,
-                    y: -normalizedY * force * multiplier
-                });
-            }
-        });
-    });
-}
-```
-
-## Troubleshooting
-
-### Common Issues and Solutions
-
-#### Bodies Not Moving
-
-```javascript
-// Check if body is awake
-if (!game.physics.isBodyAwake(entity)) {
-    game.physics.setBodyAwake(entity, true);
-}
-
-// Check body type
-const bodyType = game.physics.getBodyType(entity);
-if (bodyType === 'static') {
-    game.physics.setBodyType(entity, 'dynamic');
-}
-```
+The Physics class includes built-in error handling and will gracefully fallback to simpler shapes if complex polygons fail to create. Monitor console warnings for potential issues with:
+
+- Invalid polygon definitions
+- Joint creation failures
+- Body type transitions
+- Memory leaks from undestroyed joints

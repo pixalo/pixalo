@@ -12,13 +12,14 @@ class Camera {
         this.config = {
             x: config.x || 0,
             y: config.y || 0,
-            zoom: config.zoom || 1,
+            zoom: config.zoom ?? 1,
             bounds: config.bounds || null,
-            minZoom: config.minZoom || 0.1,
-            maxZoom: config.maxZoom || 5,
+            minZoom: config.minZoom ?? 0.1,
+            maxZoom: config.maxZoom ?? 5,
             smoothing: config.smoothing ?? true,
-            smoothSpeed: config.smoothSpeed || 0.1,
-            rotation: config.rotation || 0
+            smoothSpeed: config.smoothSpeed ?? 0.1,
+            rotation: config.rotation || 0,
+            viewPadding: config.viewPadding ?? 100
         };
 
         // Store original config for reset functionality
@@ -641,7 +642,7 @@ class Camera {
     /** ======== END ======== */
 
     /** ======== VISIBILITY CHECK ======== */
-    inView (object, padding = 0) {
+    inView (object, padding = this.config.viewPadding) {
         // Calculating viewport taking zoom into account
         const viewportWidth = this.engine.baseWidth / this.zoom;
         const viewportHeight = this.engine.baseHeight / this.zoom;
@@ -685,7 +686,7 @@ class Camera {
             objectBounds.bottom < cameraTop ||
             objectBounds.top > cameraBottom);
     }
-    pointInView (x, y, padding = 0) {
+    pointInView (x, y, padding = this.config.viewPadding) {
         const viewportWidth = this.engine.baseWidth / this.zoom;
         const viewportHeight = this.engine.baseHeight / this.zoom;
 
