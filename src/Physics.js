@@ -1163,33 +1163,6 @@ class Physics {
 
         return this.world.CreateJoint(jointDef);
     }
-    destroyJoint (jointId) {
-        if (!this.joints || !this.joints.has(jointId)) {
-            this.engine.warn(`Joint with ID ${jointId} not found`);
-            return false;
-        }
-
-        const jointData = this.joints.get(jointId);
-        const {joint, entityA, entityB, type} = jointData;
-
-        try {
-            this.world.DestroyJoint(joint);
-            this.joints.delete(jointId);
-
-            // Trigger joint destruction event
-            this.engine.trigger('jointDestroyed', {
-                jointId,
-                entityA,
-                entityB,
-                type
-            });
-
-            return true;
-        } catch (error) {
-            this.engine.warn('Error destroying joint:', error);
-            return false;
-        }
-    }
     getJoint (jointId) {
         return this.joints ? this.joints.get(jointId) : null;
     }
@@ -1499,50 +1472,6 @@ class Physics {
             }
         });
     }
-    destroyAllJoints () {
-        if (!this.joints) return this;
-
-        const jointIds = Array.from(this.joints.keys());
-        for (const jointId of jointIds) {
-            this.destroyJoint(jointId);
-        }
-
-        return this;
-    }
-    getJointsForEntity (entity) {
-        if (!this.joints) return [];
-
-        const entityId = this._getEntityId(entity);
-        const entityJoints = [];
-
-        for (const [jointId, jointData] of this.joints) {
-            if (jointData.entityA.id === entityId || jointData.entityB.id === entityId) {
-                entityJoints.push({jointId, ...jointData});
-            }
-        }
-
-        return entityJoints;
-    }
-    breakJointsForEntity (entity) {
-        const entityJoints = this.getJointsForEntity(entity);
-        const brokenJoints = [];
-
-        for (const joint of entityJoints) {
-            if (this.destroyJoint(joint.jointId)) {
-                brokenJoints.push(joint.jointId);
-            }
-        }
-
-        // Trigger break event
-        if (brokenJoints.length > 0) {
-            this.engine.trigger('jointsBreak', {
-                entity,
-                brokenJoints
-            });
-        }
-
-        return brokenJoints;
-    }
     monitorJointStress (jointId, maxForce, maxTorque, callback) {
         const jointData = this.getJoint(jointId);
         if (!jointData) return this;
@@ -1588,6 +1517,43 @@ class Physics {
 
         // Start monitoring
         requestAnimationFrame(monitor);
+        return this;
+    }
+    destroyJoint (jointId) {
+        if (!this.joints || !this.joints.has(jointId)) {
+            this.engine.warn(`Joint with ID ${jointId} not found`);
+            return false;
+        }
+
+        const jointData = this.joints.get(jointId);
+        const {joint, entityA, entityB, type} = jointData;
+
+        try {
+            this.world.DestroyJoint(joint);
+            this.joints.delete(jointId);
+
+            // Trigger joint destruction event
+            this.engine.trigger('jointDestroyed', {
+                jointId,
+                entityA,
+                entityB,
+                type
+            });
+
+            return true;
+        } catch (error) {
+            this.engine.warn('Error destroying joint:', error);
+            return false;
+        }
+    }
+    destroyAllJoints () {
+        if (!this.joints) return this;
+
+        const jointIds = Array.from(this.joints.keys());
+        for (const jointId of jointIds) {
+            this.destroyJoint(jointId);
+        }
+
         return this;
     }
     debugJoint (jointId, options = {}) {

@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [1.1.0] - 2025-10-08
+## [1.1.0] - 2025-10-21
 
 ### Keyboards
 - Added multi-language keyboard support with physical/logical key distinction
@@ -9,6 +9,10 @@
 ### 🎥 Camera System
 - **Added `viewPadding` configuration** - Default padding for visibility checks in `inView()` method
 - **Enhanced visibility detection** - `inView()` now uses configurable default padding instead of hardcoded values
+
+### 💥 Physics
+- **Optimization**: `mouse`/`touch` events
+- **Added functions for managing** `Joints`
 
 ### ✨ New Features
 - **Added `isInteractive()` method** to Entity class for advanced event handling

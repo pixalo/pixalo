@@ -58,14 +58,24 @@ class Pixalo extends Utils {
         if (config?.worker && !run)
             return this.#setupWorker(config);
 
-        this.ctx = this.canvas.getContext('2d');
-        this.entities = new Map();
         this.window = {
             width : config?.window?.width  || (typeof window !== 'undefined' ? window.innerWidth  : 0),
             height: config?.window?.height || (typeof window !== 'undefined' ? window.innerHeight : 0),
             devicePixelRatio: config?.window?.devicePixelRatio || (typeof window !== 'undefined' ? window.devicePixelRatio : 0)
         };
+
+        const context = {
+            id: '2d',
+            alpha: true,
+            colorSpace: 'srgb',
+            desynchronized: true,
+            willReadFrequently: false,
+            ...(config?.context || {})
+        };
+
+        this.ctx = this.canvas.getContext(context.id, context);
         this.config = {
+            context,
             worker: config.worker || false,
             width : config.width  || (this.canvas.width || 0),
             height: config.height || (this.canvas.height || 0),
@@ -81,6 +91,9 @@ class Pixalo extends Utils {
         this.baseWidth = this.config.width;
         this.baseHeight = this.config.height;
 
+        this.running  = false;
+        this.lastTime = 0;
+
         this.debugger = new Debugger(this, {
             active: Boolean(config.debugger),
             ...config.debugger || {},
@@ -89,8 +102,8 @@ class Pixalo extends Utils {
                 actual: this.config.fps
             }
         });
-        this.running = false;
-        this.lastTime = 0;
+
+        this.entities   = new Map();
 
         this.background = new Background(this);
         this.camera     = new Camera(this, config.camera);
@@ -111,43 +124,7 @@ class Pixalo extends Utils {
         this.animations   = {};
         this.maxDeltaTime = 1000 / 30;
 
-        const canvasConfig = {
-            // Canvas attributes
-            attributes: {
-                tabIndex: 0,
-                width: this.config.width * this.config.quality,
-                height: this.config.height * this.config.quality
-            },
-
-            // Canvas style properties
-            style: {
-                width: this.config.width + 'px',
-                height: this.config.height + 'px',
-                outline: 'none',
-                backgroundColor: this.config.background,
-                imageRendering: this.config.imageRendering || this.canvas?.style?.imageRendering
-            }
-        };
-
-        if (!this.canvas?.style)
-            this.canvas.style = {};
-
-        // Apply canvas attributes
-        Object.assign(this.canvas, canvasConfig.attributes);
-        Object.assign(this.canvas.style, canvasConfig.style);
-
-        this.workerSend({
-            action: 'update_canvas',
-            props : canvasConfig
-        });
-
-        // Setup auto resize if target specified
-        if (this.config.resizeTarget) {
-            this.workerSend({
-                action: 'set_resize_target',
-                target: this.config.resizeTarget
-            });
-        }
+        this.#applyCanvasConfig();
 
         this.draggedEntity   = null;
         this.draggedEntities = new Map();
@@ -157,6 +134,50 @@ class Pixalo extends Utils {
         this._setupEventListeners();
 
         this.trigger('ready');
+    }
+    #applyCanvasConfig () {
+        const config = this.config;
+        const canvas = this.canvas;
+
+        const canvasConfig = {
+            // Canvas attributes
+            attributes: {
+                tabIndex: 0,
+                width: config.width * config.quality,
+                height: config.height * config.quality
+            },
+
+            // Canvas style properties
+            style: {
+                width: config.width + 'px',
+                height: config.height + 'px',
+                outline: 'none',
+                backgroundColor: config.background,
+                imageRendering: config.imageRendering || canvas.style?.imageRendering,
+                colorProfile: config.context.colorSpace || 'srgb',
+                colorScheme: 'normal'
+            }
+        };
+
+        if (!canvas.style)
+            canvas.style = {};
+
+        // Apply canvas attributes
+        Object.assign(this.canvas, canvasConfig.attributes);
+        Object.assign(this.canvas.style, canvasConfig.style);
+
+        this.workerSend({
+            action: 'update_canvas',
+            props: canvasConfig
+        });
+
+        // Setup auto resize if target specified
+        if (config.resizeTarget) {
+            this.workerSend({
+                action: 'set_resize_target',
+                target: config.resizeTarget
+            });
+        }
     }
     #setupWorker (config) {
         if (typeof DedicatedWorkerGlobalScope === 'undefined')
@@ -743,29 +764,6 @@ class Pixalo extends Utils {
         // Reset debugger
         this.debugger.clearItems();
 
-        // Reset canvas and context
-        this.clear();
-        this._applyQuality(this.config.quality);
-
-        // Reset canvas style to original config
-        const canvasConfig = {
-            attributes: {
-                tabIndex: 0,
-                width: this.config.width * this.config.quality,
-                height: this.config.height * this.config.quality
-            },
-            style: {
-                width: this.config.width + 'px',
-                height: this.config.height + 'px',
-                outline: 'none',
-                backgroundColor: this.config.background,
-                imageRendering: this.config.imageRendering || this.canvas?.style?.imageRendering
-            }
-        };
-
-        Object.assign(this.canvas, canvasConfig.attributes);
-        Object.assign(this.canvas.style, canvasConfig.style);
-
         // Reset subsystem configurations to original config
         this.gridEnabled = Boolean(this.config.grid);
         this.physicsEnabled = Boolean(this.config.physics);
@@ -780,11 +778,12 @@ class Pixalo extends Utils {
         this.tileMap = new TileMap(this);
         this.emitters = new Emitters(this);
 
-        // Send worker update if in worker mode
-        this.workerSend({
-            action: 'update_canvas',
-            props: canvasConfig
-        });
+        // Reset canvas and context
+        this.clear();
+        this._applyQuality(this.config.quality);
+
+        // Reset canvas to original config
+        this.#applyCanvasConfig();
 
         return this;
     }
@@ -841,7 +840,13 @@ class Pixalo extends Utils {
                         }
 
                         const blob = await response.blob();
-                        asset = await createImageBitmap(blob);
+                        const bitmapOptions = {
+                            colorSpaceConversion: 'default',
+                            imageOrientation: 'from-image',
+                            premultiplyAlpha: 'default',
+                            ...config.bitmap || {}
+                        };
+                        asset = await createImageBitmap(blob, bitmapOptions);
 
                         if (type.toLowerCase() === 'tiles') {
                             if (!config.tileSize) {
@@ -887,7 +892,7 @@ class Pixalo extends Utils {
                         }
 
                         const blob = await response.blob();
-                        asset = await createImageBitmap(blob);
+                        asset = await createImageBitmap(blob, config.bitmap || {});
 
                         // Validation of essential parameters
                         const requiredParams = ['columns', 'rows', 'width', 'height'];

@@ -622,20 +622,6 @@ const jointId = game.physics.joint(boxA, boxB, {
 });
 ```
 
-### `destroyJoint(jointId): boolean`
-
-Destroys a joint by its ID.
-
-| Name    | Type   | Default |
-|---------|--------|---------|
-| jointId | string | -       |
-
-**Usage Example:**
-
-```javascript
-game.physics.destroyJoint(jointId);
-```
-
 ### `getJoint(jointId): Object`
 
 Retrieves joint data by ID.
@@ -932,10 +918,10 @@ const chainJoints = game.physics.createChain([link1, link2, link3, link4], {
 
 Creates a rope using distance joints between multiple entities.
 
-| Name     | Type  | Default |
-|----------|-------|---------|
-| entities | Array | -       |
-| options  | Object| {}      |
+| Name     | Type   | Default |
+|----------|--------|---------|
+| entities | Array  | -       |
+| options  | Object | {}      |
 
 **Options:**
 - `flexibility`: number - Rope flexibility (frequency)
@@ -955,6 +941,20 @@ const ropeJoints = game.physics.createRope([segment1, segment2, segment3], {
 
 ### Joint Management
 
+### `destroyJoint(jointId): boolean`
+
+Destroys a joint by its ID.
+
+| Name    | Type   | Default |
+|---------|--------|---------|
+| jointId | string | -       |
+
+**Usage Example:**
+
+```javascript
+game.physics.destroyJoint(jointId);
+```
+
 ### `destroyAllJoints(): Physics`
 
 Destroys all joints in the physics world.
@@ -963,34 +963,6 @@ Destroys all joints in the physics world.
 
 ```javascript
 game.physics.destroyAllJoints();
-```
-
-### `getJointsForEntity(entity): Array`
-
-Gets all joints connected to a specific entity.
-
-| Name   | Type   | Default |
-|--------|--------|---------|
-| entity | Object | -       |
-
-**Usage Example:**
-
-```javascript
-const entityJoints = game.physics.getJointsForEntity(myEntity);
-```
-
-### `breakJointsForEntity(entity): Array`
-
-Breaks all joints connected to a specific entity.
-
-| Name   | Type   | Default |
-|--------|--------|---------|
-| entity | Object | -       |
-
-**Usage Example:**
-
-```javascript
-const brokenJoints = game.physics.breakJointsForEntity(myEntity);
 ```
 
 ### `monitorJointStress(jointId, maxForce, maxTorque, callback): Physics`
