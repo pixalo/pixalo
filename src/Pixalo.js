@@ -58,11 +58,7 @@ class Pixalo extends Utils {
         if (config?.worker && !run)
             return this.#setupWorker(config);
 
-        this.window = {
-            width : config?.window?.width  || (typeof window !== 'undefined' ? window.innerWidth  : 0),
-            height: config?.window?.height || (typeof window !== 'undefined' ? window.innerHeight : 0),
-            devicePixelRatio: config?.window?.devicePixelRatio || (typeof window !== 'undefined' ? window.devicePixelRatio : 0)
-        };
+        this.#createWindow(config?.window);
 
         const context = {
             id: '2d',
@@ -103,7 +99,7 @@ class Pixalo extends Utils {
             }
         });
 
-        this.entities   = new Map();
+        this.entities = new Map();
 
         this.background = new Background(this);
         this.camera     = new Camera(this, config.camera);
@@ -134,6 +130,25 @@ class Pixalo extends Utils {
         this._setupEventListeners();
 
         this.trigger('ready');
+    }
+    #createWindow ($window = null) {
+        let {innerWidth, outerWidth, innerHeight, outerHeight, devicePixelRatio} = $window || {
+            innerWidth : window.innerWidth,
+            innerHeight: window.innerHeight,
+            outerWidth : window.outerWidth,
+            outerHeight: window.outerHeight,
+            devicePixelRatio: window.devicePixelRatio
+        };
+        const bar = outerHeight - innerHeight;
+
+        this.window = {
+            zoom  : Math.round((outerWidth / innerWidth) * 100),
+            width : outerWidth,
+            height: outerHeight - bar,
+            innerWidth,
+            innerHeight,
+            devicePixelRatio
+        };
     }
     #applyCanvasConfig () {
         const config = this.config;
@@ -212,30 +227,33 @@ class Pixalo extends Utils {
                 this.on('worker_msg', this._workerEventListeners);
                 return;
             }
-
             this.warn('Browser environment is required. This feature is only available in browser context.');
             return;
         }
 
-        // Start observing canvas size changes
-        new ResizeObserver(this._handleResize.bind(this)).observe(this.canvas);
-
         // Setup auto resize if target specified
         const target = this.config.resizeTarget;
-        if (target === 'window') {
-            window.addEventListener('resize', () => {
-                this.resize(window.innerWidth, window.innerHeight);
-            });
-        } else if (target === 'document') {
+
+        window.addEventListener('resize', () => {
+            this.#createWindow();
+
+            if (target === 'window')
+                this.resize(this.window.width, this.window.height);
+        });
+
+        if (target === 'document') {
             window.addEventListener('resize', () => {
                 this.resize(document.documentElement.clientWidth, document.documentElement.clientHeight);
             });
-        } else {
+        } else if (typeof target === 'string') {
             // It's a selector string
             const element = document.querySelector(target);
             if (element && ResizeObserver) {
                 new ResizeObserver(() => this._handleResize()).observe(element);
             }
+        } else {
+            // Start observing canvas size changes
+            new ResizeObserver(this._handleResize.bind(this)).observe(this.canvas);
         }
 
         document.addEventListener('visibilitychange', () => {
@@ -321,6 +339,11 @@ class Pixalo extends Utils {
 
         // Setup auto resize if target specified
         if (data?.action === 'resizedTarget') {
+            if (typeof data.window === 'object') {
+                this.#createWindow(data.window);
+                data.width  = this.window.width;
+                data.height = this.window.height;
+            }
             this._updateCanvasSize(data.width, data.height);
         }
     }

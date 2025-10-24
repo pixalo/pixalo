@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [1.2.0] - 2025-
+
+### Issues Resolved
+- Browser Zoom Interference: From now on, there will be no design issues and browser zoom will not change or disrupt the position of entities in your game logic.
+
 ## [1.1.0] - 2025-10-21
 
 ### Keyboards

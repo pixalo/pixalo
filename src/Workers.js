@@ -31,12 +31,9 @@ class Workers {
 
         const worker = new Worker(blobUrl || script, {type: options.type || 'module'});
         worker.postMessage({
-            wid: wid, canvas: offscreen,
-            window: {
-                width: window.innerWidth,
-                height: window.innerHeight,
-                devicePixelRatio: window.devicePixelRatio
-            }
+            wid: wid,
+            canvas: offscreen,
+            window: this.#getWindow()
         }, [offscreen]);
 
         worker.onmessage = event => {
@@ -56,6 +53,15 @@ class Workers {
         Workers.workers.set(wid, {canvas, offscreen, worker, audio});
 
         return wid;
+    }
+    static #getWindow () {
+        return {
+            innerWidth : window.innerWidth,
+            innerHeight: window.innerHeight,
+            outerWidth : window.outerWidth,
+            outerHeight: window.outerHeight,
+            devicePixelRatio: window.devicePixelRatio
+        };
     }
 
     static send (wid, message) {
@@ -134,15 +140,14 @@ class Workers {
                     window.addEventListener('resize', () => {
                         this.send(data.wid, {
                             action: 'resizedTarget',
-                            width: window.innerWidth,
-                            height: window.innerHeight,
+                            window: this.#getWindow()
                         })
                     });
                 } else if (target === 'document') {
                     document.addEventListener('resize', () => this.send(data.wid, {
                         action: 'resizedTarget',
-                        width : document.innerWidth,
-                        height: document.innerHeight,
+                        width : document.documentElement.clientWidth,
+                        height: document.documentElement.clientHeight,
                     }));
                 } else {
                     // It's a selector string

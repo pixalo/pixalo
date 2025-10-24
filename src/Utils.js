@@ -13,25 +13,25 @@ class Utils {
         return this;
     }
     _handleResize () {
-        const width = this.canvas.offsetWidth;
+        const width  = this.canvas.offsetWidth;
         const height = this.canvas.offsetHeight;
         this._updateCanvasSize(width, height);
     }
     _updateCanvasSize (width, height) {
         // Update the base dimensions
-        this.baseWidth = width;
+        this.baseWidth  = width;
         this.baseHeight = height;
 
         // Update config dimensions
-        this.config.width = width;
+        this.config.width  = width;
         this.config.height = height;
 
         // Update canvas physical size (considering quality)
-        this.canvas.width = width * this.config.quality;
+        this.canvas.width  = width * this.config.quality;
         this.canvas.height = height * this.config.quality;
 
         // Update canvas display size
-        this.canvas.style.width = width + 'px';
+        this.canvas.style.width  = width + 'px';
         this.canvas.style.height = height + 'px';
 
         // Reset context scale
@@ -49,10 +49,7 @@ class Utils {
         });
 
         // Trigger resize event
-        this.trigger('resize', {
-            width: width,
-            height: height
-        });
+        this.trigger('resize', {width, height});
     }
     /** ======== END ======== */
 
