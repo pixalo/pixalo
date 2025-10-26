@@ -24,20 +24,32 @@ Pixalo follows a component-based architecture where each system operates indepen
 
 ```typescript
 const game = new Pixalo('#canvas', {
-    worker: Boolean,                              // Enable web worker mode
     width: 800,
     height: 600,
     fps: 60,
+    context: {
+      // If you have a different, customized `context` that exactly emulates the commands and functions of `CanvasRenderingContext2D`,
+      // enter its ID here.
+      id: '2d',
+      
+      // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getContextAttributes
+      alpha: true,
+      colorSpace: 'srgb',
+      desynchronized: true,
+      willReadFrequently: false,
+    },
+    appendTo: String|HTMLElement,                 // Default(`body`) - Specify where to add the `canvas` tag
     quality: window.devicePixelRatio || 1,
     background: 'transparent' | '#fff' | 'hsl(178 80.6% 6.1%)',
     imageRendering: String,                       // Canvas image rendering style
     resizeTarget: 'window' | 'document' | `#${string}` | `.${string}` | HTMLElement,
-    autoStartStop: true,                          // pause rendering when tab is hidden, resume when visible
+    autoResize: Boolean,                          // Default(`true`) - Set to `true` for automatic resizing.
+    autoStartStop: Boolean,                       // Default(`true`) pause rendering when tab is hidden, resume when visible
+    debugger: DebuggerConfig<object> | Boolean,   // See Debugger class documentation
     grid: GridConfig<object> | Boolean,           // See Grid class documentation
     collision: CollisionConfig<object> | Boolean, // See Collision class documentation
     physics: PhysicsConfig<object> | Boolean,     // See Physics class documentation
     camera: CameraConfig<object> | Undefined,     // See Camera class documentation
-    debugger: DebuggerConfig<object> | Boolean,   // See Debugger class documentation
 });
 ```
 

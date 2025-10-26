@@ -1,0 +1,33 @@
+{
+  "name": "pixalo",
+  "version": "1.1.0",
+  "description": "Pixalo is a lightweight but powerful 2D engine that you can easily use to implement your ideas in the game world. Numerous commands are available for convenience and creation, from entity management to physics and 3D sound playback. All these commands are ready to make it easy for you to create a game.",
+  "keywords": [
+    "game", "build game", "javascript", "web game", "canvas",
+    "engine", "2d engine", "2d games", "game development",
+    "physics engine", "collisions"
+  ],
+  "homepage": "https://github.com/pixalo/pixalo#readme",
+  "bugs": {
+    "url": "https://github.com/pixalo/pixalo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pixalo/pixalo.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "webpack"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@babel/core": "^7.28.0",
+    "@babel/preset-env": "^7.28.0",
+    "babel-loader": "^10.0.0",
+    "terser-webpack-plugin": "^5.3.14",
+    "webpack": "^5.100.2",
+    "webpack-cli": "^6.0.1"
+  }
+}

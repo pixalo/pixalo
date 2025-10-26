@@ -27,7 +27,7 @@ const player = game.append('player', {
 });
 
 game.on('update', deltaTime => {
-    const speed = 150; // 150 px/s
+    const speed = 250; // 250 px/s
     const step = speed * (deltaTime / 1000);
     let dx = 0, dy = 0;
     const leftKey = game.isKeyPressed('left', 'a');

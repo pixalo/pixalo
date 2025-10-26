@@ -25,21 +25,8 @@ class Pixalo extends Utils {
         selector = selector || {};
         config.worker = typeof DedicatedWorkerGlobalScope !== 'undefined';
 
-        if (typeof selector === 'string') {
-            let canvas = document.querySelector(selector);
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-                if (selector.startsWith('#')) {
-                    canvas.id = selector.replace('#', '');
-                } else {
-                    selector = selector.replace('.', '');
-                    canvas.classList.add(selector);
-                }
-                document.body.appendChild(canvas);
-            }
-            this.canvas = canvas;
-        } else if (typeof HTMLCanvasElement !== 'undefined' && selector instanceof HTMLCanvasElement) {
-            this.canvas = selector;
+        if (typeof selector === 'string' || (typeof HTMLCanvasElement !== 'undefined' && selector instanceof HTMLCanvasElement)) {
+            this.canvas = Pixalo._handleCanvasSelector(selector, config?.appendTo || null);
         } else if (typeof selector === 'object') {
             config = {...selector, ...config};
         } else {
@@ -58,7 +45,7 @@ class Pixalo extends Utils {
         if (config?.worker && !run)
             return this.#setupWorker(config);
 
-        this.#createWindow(config?.window);
+        this._createWindow(config?.window);
 
         const context = {
             id: '2d',
@@ -82,9 +69,10 @@ class Pixalo extends Utils {
             collision: config.collision || {},
             background: config.background || '#ffffff',
             resizeTarget: config.resizeTarget || false,
+            autoResize: config.autoResize ?? true,
             autoStartStop: config.autoStartStop ?? true,
         };
-        this.baseWidth = this.config.width;
+        this.baseWidth  = this.config.width;
         this.baseHeight = this.config.height;
 
         this.running  = false;
@@ -118,9 +106,9 @@ class Pixalo extends Utils {
         this.audio    = new AudioManager(this.config.worker);
 
         this.animations   = {};
-        this.maxDeltaTime = 1000 / 30;
+        this.maxDeltaTime = Math.max(1000 / this.config.fps, 16.67);
 
-        this.#applyCanvasConfig();
+        this._applyCanvasConfig();
 
         this.draggedEntity   = null;
         this.draggedEntities = new Map();
@@ -131,7 +119,8 @@ class Pixalo extends Utils {
 
         this.trigger('ready');
     }
-    #createWindow ($window = null) {
+
+    _createWindow ($window = null) {
         let {innerWidth, outerWidth, innerHeight, outerHeight, devicePixelRatio} = $window || {
             innerWidth : window.innerWidth,
             innerHeight: window.innerHeight,
@@ -139,18 +128,19 @@ class Pixalo extends Utils {
             outerHeight: window.outerHeight,
             devicePixelRatio: window.devicePixelRatio
         };
-        const bar = outerHeight - innerHeight;
+        const zoom = Math.round((outerWidth / innerWidth) * 100);
+        const bar  = outerHeight - innerHeight;
 
         this.window = {
-            zoom  : Math.round((outerWidth / innerWidth) * 100),
-            width : outerWidth,
+            zoom,
+            width : Math.round(outerWidth * 100 / zoom),
             height: outerHeight - bar,
-            innerWidth,
-            innerHeight,
+            outerWidth, outerHeight,
+            innerWidth, innerHeight,
             devicePixelRatio
         };
     }
-    #applyCanvasConfig () {
+    _applyCanvasConfig () {
         const config = this.config;
         const canvas = this.canvas;
 
@@ -194,6 +184,7 @@ class Pixalo extends Utils {
             });
         }
     }
+
     #setupWorker (config) {
         if (typeof DedicatedWorkerGlobalScope === 'undefined')
             throw new Error('Please run Pixalo in the Worker environment.');
@@ -231,29 +222,17 @@ class Pixalo extends Utils {
             return;
         }
 
+        this._windowResizeListener();
+
         // Setup auto resize if target specified
-        const target = this.config.resizeTarget;
-
-        window.addEventListener('resize', () => {
-            this.#createWindow();
-
-            if (target === 'window')
-                this.resize(this.window.width, this.window.height);
-        });
-
-        if (target === 'document') {
-            window.addEventListener('resize', () => {
-                this.resize(document.documentElement.clientWidth, document.documentElement.clientHeight);
-            });
-        } else if (typeof target === 'string') {
-            // It's a selector string
-            const element = document.querySelector(target);
-            if (element && ResizeObserver) {
-                new ResizeObserver(() => this._handleResize()).observe(element);
-            }
+        let target = this.config.resizeTarget;
+        if (target && target !== 'window' && target !== 'document') {
+            if (typeof target === 'string')
+                target = document.querySelector(target);
+            this._setupResizeObserver(target);
         } else {
             // Start observing canvas size changes
-            new ResizeObserver(this._handleResize.bind(this)).observe(this.canvas);
+            this._setupResizeObserver(this.canvas);
         }
 
         document.addEventListener('visibilitychange', () => {
@@ -340,11 +319,18 @@ class Pixalo extends Utils {
         // Setup auto resize if target specified
         if (data?.action === 'resizedTarget') {
             if (typeof data.window === 'object') {
-                this.#createWindow(data.window);
+                this._createWindow(data.window);
                 data.width  = this.window.width;
                 data.height = this.window.height;
             }
-            this._updateCanvasSize(data.width, data.height);
+
+            if (this.config.autoResize)
+                this.resize(data.width, data.height, true, this.config.resizeTarget);
+            else
+                this.trigger('resize', {
+                    width : data.width, height: data.height,
+                    target: this.config.resizeTarget
+                });
         }
     }
 
@@ -372,6 +358,8 @@ class Pixalo extends Utils {
     quality (value) {
         if (value === undefined)
             return this.config.quality;
+
+        value = Number(value.toFixed(2));
 
         this.config.quality = value;
         this._applyQuality(value);
@@ -806,7 +794,7 @@ class Pixalo extends Utils {
         this._applyQuality(this.config.quality);
 
         // Reset canvas to original config
-        this.#applyCanvasConfig();
+        this._applyCanvasConfig();
 
         return this;
     }
