@@ -26,23 +26,23 @@ collision disabled and manages collision enter/exit events.
 
 ```javascript
 // Typically handled automatically by Pixalo, but can be called manually
-game.collision.updateCollisions([entity1, entity2, entity3]);
+game.collision.updateCollisions([entityA, entityB, entity3]);
 ```
 
 ---
 
-### `detectCollisionDetailed(entity1, entity2): Object`
+### `detectCollisionDetailed(entityA, entityB): Object`
 
 Performs detailed collision detection between two entities and returns comprehensive collision information.
 Automatically applies thresholds for rounded corners and uses appropriate detection method based on shape types.
 
 | Name    | Type   | Default | Description                      |
 |---------|--------|---------|----------------------------------|
-| entity1 | Object | -       | First entity to check collision  |
-| entity2 | Object | -       | Second entity to check collision |
+| entityA | Object | -       | First entity to check collision  |
+| entityB | Object | -       | Second entity to check collision |
 
 **Returns:**  
-`{colliding: Boolean, side1: String, side2: String, overlap: Number, normal: {x,y}, point: {x,y}}`
+`{colliding: Boolean, sideA: String, sideB: String, overlap: Number, normal: {x,y}, point: {x,y}}`
 
 **Usage Example:**
 
@@ -50,7 +50,7 @@ Automatically applies thresholds for rounded corners and uses appropriate detect
 const collisionInfo = game.collision.detectCollisionDetailed(player, enemy);
 if (collisionInfo.colliding) {
     console.log('Collision detected!', collisionInfo);
-    console.log('Player hit on:', collisionInfo.side1);
+    console.log('Player hit on:', collisionInfo.sideA);
     console.log('Overlap distance:', collisionInfo.overlap);
 }
 ```
@@ -66,7 +66,7 @@ Specialized collision detection method for circular entities with precise center
 | circle1 | Object | -       | First circular entity  |
 | circle2 | Object | -       | Second circular entity |
 
-**Returns:** `{colliding: Boolean, side1: String, side2: String, overlap: Number, normal: {x,y}, point: {x,y}}`
+**Returns:** `{colliding: Boolean, sideA: String, sideB: String, overlap: Number, normal: {x,y}, point: {x,y}}`
 
 **Usage Example:**
 
@@ -80,7 +80,7 @@ if (result.colliding) {
 
 ---
 
-### `detectSATCollision(vertices1, vertices2, entity1, entity2, threshold): Object`
+### `detectSATCollision(vertices1, vertices2, entityA, entityB, threshold): Object`
 
 Performs Separating Axis Theorem collision detection between two sets of vertices with configurable threshold for
 rounded shapes.
@@ -89,30 +89,30 @@ rounded shapes.
 |-----------|--------|---------|------------------------------------------|
 | vertices1 | Array  | -       | Vertices of first entity                 |
 | vertices2 | Array  | -       | Vertices of second entity                |
-| entity1   | Object | -       | First entity reference                   |
-| entity2   | Object | -       | Second entity reference                  |
+| entityA   | Object | -       | First entity reference                   |
+| entityB   | Object | -       | Second entity reference                  |
 | threshold | Number | 0       | Threshold for rounded corner adjustments |
 
-**Returns:** `{colliding: Boolean, side1: String, side2: String, overlap: Number, normal: {x,y}, point: {x,y}}`
+**Returns:** `{colliding: Boolean, sideA: String, sideB: String, overlap: Number, normal: {x,y}, point: {x,y}}`
 
 **Usage Example:**
 
 ```javascript
-const vertices1 = game.collision.getVertices(entity1);
-const vertices2 = game.collision.getVertices(entity2);
-const collision = game.collision.detectSATCollision(vertices1, vertices2, entity1, entity2, 2);
+const vertices1 = game.collision.getVertices(entityA);
+const vertices2 = game.collision.getVertices(entityB);
+const collision = game.collision.detectSATCollision(vertices1, vertices2, entityA, entityB, 2);
 ```
 
 ---
 
-### `checkAABBCollision(entity1, entity2, threshold): Boolean`
+### `checkAABBCollision(entityA, entityB, threshold): Boolean`
 
 Performs Axis-Aligned Bounding Box collision detection for quick collision filtering with configurable threshold.
 
 | Name      | Type   | Default | Description                         |
 |-----------|--------|---------|-------------------------------------|
-| entity1   | Object | -       | First entity to check               |
-| entity2   | Object | -       | Second entity to check              |
+| entityA   | Object | -       | First entity to check               |
+| entityB   | Object | -       | Second entity to check              |
 | threshold | Number | 0       | Additional padding for bounding box |
 
 **Usage Example:**
@@ -338,8 +338,8 @@ Converts a collision normal vector to a cardinal direction string based on angle
 const side = game.collision.getSideFromNormal({x: 0, y: -1});
 console.log(side); // 'top'
 
-const side2 = game.collision.getSideFromNormal({x: 1, y: 0});
-console.log(side2); // 'right'
+const sideB = game.collision.getSideFromNormal({x: 1, y: 0});
+console.log(sideB); // 'right'
 ```
 
 ---
@@ -909,7 +909,7 @@ entityB.x += collisionInfo.normal.x * collisionInfo.overlap * 0.5;
 entityB.y += collisionInfo.normal.y * collisionInfo.overlap * 0.5;
 
 // Apply physics response
-if (collisionInfo.side1 === 'bottom') {
+if (collisionInfo.sideA === 'bottom') {
     entityA.velocity.y = 0;
     entityA.data('onGround', true);
 }

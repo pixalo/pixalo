@@ -106,6 +106,7 @@ class Pixalo extends Utils {
         this.audio    = new AudioManager(this.config.worker);
 
         this.animations   = {};
+        this.deltaTime    = 0;
         this.maxDeltaTime = Math.max(1000 / this.config.fps, 16.67);
 
         this._applyCanvasConfig();
@@ -628,6 +629,7 @@ class Pixalo extends Utils {
 
         // Execute frame only if enough time has passed
         if (deltaTime >= frameInterval) {
+            this.deltaTime = deltaTime;
             this.clear();
             this.updateTimers(timestamp);
             this.update(deltaTime);
@@ -1069,14 +1071,14 @@ class Pixalo extends Utils {
         this.collisionEnabled = true;
         return this;
     }
-    checkCollision (entity1, entity2) {
-        return this.collision.detectCollisionDetailed(entity1, entity2);
+    checkCollision (entityA, entityB) {
+        return this.collision.detectCollisionDetailed(entityA, entityB);
     }
     checkGroupCollision (group1, group2) {
-        for (const entity1 of group1) {
-            for (const entity2 of group2) {
-                if (this.detectCollisionDetailed(entity1, entity2)) {
-                    return {entity1, entity2};
+        for (const entityA of group1) {
+            for (const entityB of group2) {
+                if (this.detectCollisionDetailed(entityA, entityB)) {
+                    return {entityA, entityB};
                 }
             }
         }

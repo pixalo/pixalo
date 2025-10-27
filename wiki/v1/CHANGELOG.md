@@ -6,11 +6,15 @@
 - Browser Zoom Interference: From now on, there will be no design issues and browser zoom will not change or disrupt the position of entities in your game logic.
 - Optimized ViewPort and Canvas Size settings for better control and to avoid scaling interference
 - fix: Stabilize frame timing by optimizing deltaTime calculations and implementing consistent FPS management
+- Collision System: Enhanced collision detection accuracy, particularly for rectangle-to-rectangle collision side detection
 
 ### New Options
 - The `context` key has been added to the `config` of the `Pixalo` class to fully configure `ContextAttributes`.
 - Added `autoResize` key to automatically resize the Canvas tag. If you do not want automatic resizing, set it to `false`. However, the `resize` event will be called if this key is `false` and you can manually set your desired size on the Canvas.
 - The `appendTo` key has been added so you can specify where the `canvas` tag should be added.
+
+
+---
 
 ## [1.1.0] - 2025-10-21
 

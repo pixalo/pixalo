@@ -1217,14 +1217,14 @@ Disables the collision detection system.
 game.disableCollisions();
 ```
 
-### `checkCollision(entity1, entity2)`: Object | Boolean
+### `checkCollision(entityA, entityB)`: Object | Boolean
 
 Checks collision between two specific entities.
 
 | Name    | Type   | Default |
 |---------|--------|---------|
-| entity1 | Entity | -       |
-| entity2 | Entity | -       |
+| entityA | Entity | -       |
+| entityB | Entity | -       |
 
 **Usage Examples:**
 
@@ -1255,8 +1255,8 @@ const enemies = game.findByClass('enemy');
 const collision = game.checkGroupCollision(bullets, enemies);
 
 if (collision) {
-    game.kill(collision.entity1.id);
-    game.kill(collision.entity2.id);
+    game.kill(collision.entityA.id);
+    game.kill(collision.entityB.id);
 }
 ```
 
