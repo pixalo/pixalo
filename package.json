@@ -1,6 +1,6 @@
 {
   "name": "pixalo",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Pixalo is a lightweight but powerful 2D engine that you can easily use to implement your ideas in the game world. Numerous commands are available for convenience and creation, from entity management to physics and 3D sound playback. All these commands are ready to make it easy for you to create a game.",
   "keywords": [
     "game", "build game", "javascript", "web game", "canvas",
