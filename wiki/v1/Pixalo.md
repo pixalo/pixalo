@@ -1879,39 +1879,39 @@ const progress = game.Ease.easeInOutQuad(0.5); // Smooth curve at 50%
 ### Canvas and Context
 
 - `canvas` - HTML5 Canvas element
-- `ctx` - 2D rendering context
+- `ctx`    - 2D rendering context
 - `config` - Engine configuration object
 - `window` - Window dimensions and device info
 
 ### State Management
 
-- `running` - Boolean indicating if game loop is active
+- `running`  - Boolean indicating if game loop is active
 - `entities` - Map of all game entities
-- `assets` - Map of loaded assets
-- `timers` - Map of active timers
-- `_data` - Map for custom global data
+- `assets`   - Map of loaded assets
+- `timers`   - Map of active timers
+- `dataset`  - Map for custom global data
 
 ### Input State
 
-- `pressedKeys` - Set of currently pressed keys
-- `draggedEntity` - Currently dragged entity (mouse)
+- `pressedKeys`     - Set of currently pressed keys
+- `draggedEntity`   - Currently dragged entity (mouse)
 - `draggedEntities` - Map of dragged entities (touch)
-- `hoveredEntity` - Currently hovered entity
+- `hoveredEntity`   - Currently hovered entity
 
 ### Subsystems
 
-- `debugger` - Debug system instance
-- `camera` - Camera system instance
+- `debugger`   - Debug system instance
+- `camera`     - Camera system instance
 - `background` - Background system instance
-- `grid` - Grid system instance
-- `physics` - Physics system instance
-- `collision` - Collision system instance
-- `tileMap` - TileMap system instance
-- `emitters` - Particle emitter system instance
-- `audio` - Audio manager instance
+- `grid`       - Grid system instance
+- `physics`    - Physics system instance
+- `collision`  - Collision system instance
+- `tileMap`    - TileMap system instance
+- `emitters`   - Particle emitter system instance
+- `audio`      - Audio manager instance
 
 ### Configuration Flags
 
-- `gridEnabled` - Grid rendering enabled
-- `physicsEnabled` - Physics system enabled
+- `gridEnabled`      - Grid rendering enabled
+- `physicsEnabled`   - Physics system enabled
 - `collisionEnabled` - Collision detection enabled

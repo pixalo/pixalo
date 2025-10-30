@@ -80,7 +80,7 @@ class Entity {
             spikes: config.spikes || 5
         };
 
-        this._data = new Map();
+        this.dataset = new Map();
         if (config?.data) {
             for (const key in config.data)
                 this.data(key, config.data[key]);
@@ -275,6 +275,15 @@ class Entity {
             .filter(([, ent]) => ent.class.has(className))
             .map(([, ent]) => ent);
     }
+    findDeep (id) {
+        if (this.children.has(id)) return this.children.get(id);
+
+        for (const entity of this.children.values()) {
+            const found = this.engine._findDeepChildren(entity, id);
+            if (found) return found;
+        }
+        return null;
+    }
     getEntities () {
         const entities = [this];
 
@@ -297,7 +306,7 @@ class Entity {
             absoluteY: this.absoluteY,
             width: this.width,
             height: this.height,
-            _data: this._data,
+            dataset: this.dataset,
             engine: this.engine,
             constrainToParent: this.constrainToParent,
             zIndex: this.zIndex,
@@ -370,6 +379,48 @@ class Entity {
         });
 
         return clone;
+    }
+    next (cycle = false) {
+        const container = this.parent ? this.parent.children : this.engine.entities;
+        const keys      = [...container.keys()];          // ordered ids
+        const idx       = keys.indexOf(this.id);
+        if (idx === -1) return null;                      // safety
+
+        const nextIdx = idx + 1;
+        if (nextIdx < keys.length) return container.get(keys[nextIdx]);
+        return cycle ? container.get(keys[0]) : null;
+    }
+    prev (cycle = false) {
+        const container = this.parent ? this.parent.children : this.engine.entities;
+        const keys      = [...container.keys()];
+        const idx       = keys.indexOf(this.id);
+        if (idx === -1) return null;
+
+        const prevIdx = idx - 1;
+        if (prevIdx >= 0) return container.get(keys[prevIdx]);
+        return cycle ? container.get(keys[keys.length - 1]) : null;
+    }
+    siblings () {
+        const container = this.parent ? this.parent.children : this.engine.entities;
+        return [...container.values()].filter(e => e !== this);
+    }
+    swap (parent) {
+        if (!parent || !(parent instanceof Entity))
+            throw new TypeError('swap: parent must be an Entity');
+
+        const oldParent = this.parent;
+        if (oldParent === parent) return this;
+
+        if (oldParent) oldParent.children.delete(this.id);
+        this.parent = parent;
+        parent.children.set(this.id, this);
+        this.updatePosition();
+
+        return this;
+    }
+    empty () {
+        this.children.forEach(entity => entity._destroy());
+        return this;
     }
     /** ======== END ======== */
 
@@ -536,6 +587,8 @@ class Entity {
 
     /** ======== Wrapper Methods ======== */
     style (property, value) {
+        if (!this.engine) return this;
+
         /* ---------- getter mode ---------- */
         if (value === undefined && typeof property !== 'object') {
             if (property === 'x' || property === 'y' || property === 'width' || property === 'height')
@@ -630,6 +683,70 @@ class Entity {
         return this;
     }
     img (asset, properties = {}) {
+        if (typeof asset === 'undefined') {
+            if (!this.styles.backgroundImage)
+                return null;
+
+            // Calculate actual rendered dimensions
+            const image  = this.styles.backgroundImage;
+            const source = this.styles.backgroundImageSource;
+            const fit = this.styles.backgroundImageFit;
+
+            const imageWidth = source ? source.width : image.width;
+            const imageHeight = source ? source.height : image.height;
+
+            let renderedWidth = this.width;
+            let renderedHeight = this.height;
+
+            // Calculate actual rendered dimensions based on fit type
+            if (fit !== 'stretch') {
+                const scale = fit === 'contain'
+                    ? Math.min(this.width / imageWidth, this.height / imageHeight)
+                    : fit === 'cover'
+                        ? Math.max(this.width / imageWidth, this.height / imageHeight)
+                        : 1;
+
+                renderedWidth = imageWidth * scale;
+                renderedHeight = imageHeight * scale;
+            }
+
+            // Calculate position
+            const position = this.styles.backgroundImagePosition;
+            let x = -this.width / 2;
+            let y = -this.height / 2;
+
+            if (position.includes('center')) {
+                x = -renderedWidth / 2;
+                y = -renderedHeight / 2;
+            } else {
+                if (position.includes('right')) x = this.width / 2 - renderedWidth;
+                if (position.includes('bottom')) y = this.height / 2 - renderedHeight;
+            }
+
+            return {
+                image: this.styles.backgroundImage,
+                source: this.styles.backgroundImageSource,
+                originalSize: {
+                    width: imageWidth,
+                    height: imageHeight
+                },
+                renderedSize: {
+                    width: renderedWidth,
+                    height: renderedHeight
+                },
+                position: {
+                    x: x + this.width / 2, // Convert from center-based to top-left-based coordinates
+                    y: y + this.height / 2
+                },
+                properties: {
+                    fit: this.styles.backgroundImageFit,
+                    position: this.styles.backgroundImagePosition,
+                    repeat: this.styles.backgroundImageRepeat
+                }
+            };
+        }
+
+        // Existing code for setting image
         let imageData;
 
         if (typeof asset === 'string' && asset.includes('.')) {
@@ -811,13 +928,16 @@ class Entity {
     }
     data (key, value) {
         if (value === undefined)
-            return this._data.get(key);
-        this._data.set(key, value);
+            return this.dataset.get(key);
+        this.dataset.set(key, value);
         return this;
     }
     unset (key) {
-        this._data.delete(key);
+        this.dataset.delete(key);
         return this;
+    }
+    getClass () {
+        return Array.from(this.class).join(' ');
     }
     addClass (...names) {
         names.forEach(n => this.class.add(n));
@@ -1682,39 +1802,36 @@ class Entity {
     _destroy () {
         if (!this.engine) return false;
 
+        this.halt();
+
         if (this.engine.physics && this.physics)
             this.engine.physics.removeEntity(this);
 
-        // Reset engine states if this entity is involved
-        if (this.engine.draggedEntity === this)
-            this.engine.draggedEntity = null;
-        if (this.engine.hoveredEntity === this)
-            this.engine.hoveredEntity = null;
+        if (this.engine.draggedEntity === this) this.engine.draggedEntity = null;
+        if (this.engine.hoveredEntity === this) this.engine.hoveredEntity = null;
 
-        // Remove from collision system if enabled
         if (this.engine.collisionEnabled && this.collision?.enabled)
             this.engine.collision.remove(this);
 
-        // Remove from parent if exists
         if (this.parent)
             this.parent.children.delete(this.id);
+        else
+            this.engine.entities.delete(this.id);
 
-        // Kill all children
         this.children.forEach(child => child.kill());
 
-        // Remove from engine
-        this.engine.entities.delete(this.id);
-
-        // Trigger
         this.trigger('kill');
         this.engine.trigger('kill', this.id);
 
-        // Debugger
+        // Clear all references
         this.engine.debugger.removeItem(this.id);
-
-        // Clear references
         this.parent = null;
         this.engine = null;
+        this.children.clear();
+        this.eventListeners.clear();
+        this.animationStates.clear();
+        this.dataset.clear();
+        this.class.clear();
 
         return true;
     }

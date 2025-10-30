@@ -121,6 +121,9 @@ class Collision {
     }
 
     /** ======== COLLISIONS ======== */
+    detect (entityA, entityB) {
+        return this.detectCollisionDetailed(entityA, entityB);
+    }
     detectCollisionDetailed (entityA, entityB) {
         // Adding a threshold for borderRadius
         const hasRoundedCorners = entityA.styles.borderRadius > 0 || entityB.styles.borderRadius > 0;

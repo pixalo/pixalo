@@ -34,9 +34,9 @@ class Pixalo extends Utils {
         }
 
         this.eventListeners = new Map();
-        this.assets = new Map();
-        this.timers = new Map();
-        this._data  = new Map();
+        this.assets  = new Map();
+        this.timers  = new Map();
+        this.dataset = new Map();
 
         this.#init(config);
     }
@@ -498,12 +498,12 @@ class Pixalo extends Utils {
     /** ======== DATA ======== */
     data (key, value) {
         if (value === undefined)
-            return this._data.get(key);
-        this._data.set(key, value);
+            return this.dataset.get(key);
+        this.dataset.set(key, value);
         return this;
     }
     unset (key) {
-        this._data.delete(key);
+        this.dataset.delete(key);
         return this;
     }
     /** ======== END ======== */
@@ -1056,6 +1056,23 @@ class Pixalo extends Utils {
         return Array.from(this.entities)
             .filter(([, ent]) => ent.class.has(className))
             .map(([, ent]) => ent);
+    }
+    findDeep (id) {
+        if (this.entities.has(id)) return this.entities.get(id);
+
+        for (const entity of this.entities.values()) {
+            const found = this._findDeepChildren(entity, id);
+            if (found) return found;
+        }
+        return null;
+    }
+    _findDeepChildren (entity, id) {
+        if (entity.id === id) return entity;
+        for (const child of entity.children.values()) {
+            const found = this._findDeepChildren(child, id);
+            if (found) return found;
+        }
+        return null;
     }
     isEntity (target) {
         return target instanceof Entity;
