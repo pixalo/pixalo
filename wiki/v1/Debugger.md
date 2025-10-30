@@ -32,6 +32,7 @@ const game = new Pixalo('#game', {
         active: false,                          // Enable/disable debugger
         panel : true,                           // Show/hide debug panel
         hotKey: true,                           // Enable Ctrl+D hotkey toggle
+        items : true,                           // Enable item rendering
         fps: {                                  // FPS monitoring configuration
             target: 60,
             actual: 60,

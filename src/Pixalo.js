@@ -83,7 +83,8 @@ class Pixalo extends Utils {
             ...config.debugger || {},
             fps: {
                 target: this.config.fps,
-                actual: this.config.fps
+                actual: this.config.fps,
+                ratio : 100
             }
         });
 
@@ -604,28 +605,7 @@ class Pixalo extends Utils {
         deltaTime = Math.min(deltaTime, this.maxDeltaTime);
 
         // Update FPS counter for every frame
-        if (this.debugger.active) {
-            this.debugger.frameCount++;
-            const now = timestamp;
-            const timeSinceLastUpdate = now - this.debugger.lastFpsUpdate;
-
-            if (timeSinceLastUpdate >= 1000) {
-                const actualFPS = Math.round((this.debugger.frameCount * 1000) / timeSinceLastUpdate);
-                const targetFPS = this.config.fps;
-
-                // Limit FPS ratio to a maximum of 100%
-                const ratio = Math.min(Math.round((actualFPS / targetFPS) * 100), 100);
-
-                this.debugger.fps = {
-                    target: targetFPS,
-                    actual: Math.min(actualFPS, targetFPS), // Limiting actual FPS to maximum target FPS
-                    ratio: ratio
-                };
-
-                this.debugger.frameCount = 0;
-                this.debugger.lastFpsUpdate = now;
-            }
-        }
+        this.debugger._updateFPS(timestamp);
 
         // Execute frame only if enough time has passed
         if (deltaTime >= frameInterval) {
