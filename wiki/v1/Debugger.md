@@ -32,6 +32,7 @@ const game = new Pixalo('#game', {
         active: false,                          // Enable/disable debugger
         panel : true,                           // Show/hide debug panel
         hotKey: true,                           // Enable Ctrl+D hotkey toggle
+        items : true,                           // Enable item rendering
         fps: {                                  // FPS monitoring configuration
             target: 60,
             actual: 60,
@@ -659,7 +660,7 @@ game.on('keydown', (key) => {
             break;
         case 'f3':
             // Toggle entity debug visualization
-            game.getAllEntities().forEach((entity, id) => {
+            game.getEntities().forEach((entity, id) => {
                 if (game.debugger.hasItem(id)) {
                     game.debugger.removeItem(id);
                 } else {
@@ -696,7 +697,7 @@ const exportDebugInfo = () => {
     const debugInfo = {
         timestamp: Date.now(),
         fps: game.debugger.fps,
-        entities: game.getAllEntities().size,
+        entities: game.getEntities().size,
         debugItems: game.debugger.getAllItems().length,
         systems: {
             physics: game.physicsEnabled,
@@ -712,7 +713,7 @@ const exportDebugInfo = () => {
         }
     };
 
-    console.log('Debug Export:', JSON.stringify(debugInfo, null, 2));
+    game.log('Debug Export:', JSON.stringify(debugInfo, null, 2));
     return debugInfo;
 };
 
@@ -781,11 +782,11 @@ game.timer(() => {
 
 ```javascript
 // Highlight collision events
-game.on('collision', (data) => {
-    const {entity1, entity2, point} = data;
+game.on('collisions', (data) => {
+    const {entityA, entityB, point, timestamp} = data;
 
     // Add collision point marker
-    game.debugger.addItem(`collision-${Date.now()}`, {
+    game.debugger.addItem(`collision-${timestamp}`, {
         x: point.x - 2,
         y: point.y - 2,
         width: 4,
@@ -797,7 +798,7 @@ game.on('collision', (data) => {
 
     // Remove after short time
     game.timeout(() => {
-        game.debugger.removeItem(`collision-${Date.now()}`);
+        game.debugger.removeItem(`collision-${timestamp}`);
     }, 1000);
 });
 ```

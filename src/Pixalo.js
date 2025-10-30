@@ -25,21 +25,8 @@ class Pixalo extends Utils {
         selector = selector || {};
         config.worker = typeof DedicatedWorkerGlobalScope !== 'undefined';
 
-        if (typeof selector === 'string') {
-            let canvas = document.querySelector(selector);
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-                if (selector.startsWith('#')) {
-                    canvas.id = selector.replace('#', '');
-                } else {
-                    selector = selector.replace('.', '');
-                    canvas.classList.add(selector);
-                }
-                document.body.appendChild(canvas);
-            }
-            this.canvas = canvas;
-        } else if (typeof HTMLCanvasElement !== 'undefined' && selector instanceof HTMLCanvasElement) {
-            this.canvas = selector;
+        if (typeof selector === 'string' || (typeof HTMLCanvasElement !== 'undefined' && selector instanceof HTMLCanvasElement)) {
+            this.canvas = Pixalo._handleCanvasSelector(selector, config?.appendTo || null);
         } else if (typeof selector === 'object') {
             config = {...selector, ...config};
         } else {
@@ -47,9 +34,9 @@ class Pixalo extends Utils {
         }
 
         this.eventListeners = new Map();
-        this.assets = new Map();
-        this.timers = new Map();
-        this._data  = new Map();
+        this.assets  = new Map();
+        this.timers  = new Map();
+        this.dataset = new Map();
 
         this.#init(config);
     }
@@ -58,11 +45,7 @@ class Pixalo extends Utils {
         if (config?.worker && !run)
             return this.#setupWorker(config);
 
-        this.window = {
-            width : config?.window?.width  || (typeof window !== 'undefined' ? window.innerWidth  : 0),
-            height: config?.window?.height || (typeof window !== 'undefined' ? window.innerHeight : 0),
-            devicePixelRatio: config?.window?.devicePixelRatio || (typeof window !== 'undefined' ? window.devicePixelRatio : 0)
-        };
+        this._createWindow(config?.window);
 
         const context = {
             id: '2d',
@@ -83,12 +66,13 @@ class Pixalo extends Utils {
             grid: config.grid || false,
             quality: config.quality || this.window.devicePixelRatio,
             physics: config.physics || {},
-            collision: config.collision || {},
+            collision: config.collision || {children: false},
             background: config.background || '#ffffff',
             resizeTarget: config.resizeTarget || false,
+            autoResize: config.autoResize ?? true,
             autoStartStop: config.autoStartStop ?? true,
         };
-        this.baseWidth = this.config.width;
+        this.baseWidth  = this.config.width;
         this.baseHeight = this.config.height;
 
         this.running  = false;
@@ -99,11 +83,12 @@ class Pixalo extends Utils {
             ...config.debugger || {},
             fps: {
                 target: this.config.fps,
-                actual: this.config.fps
+                actual: this.config.fps,
+                ratio : 100
             }
         });
 
-        this.entities   = new Map();
+        this.entities = new Map();
 
         this.background = new Background(this);
         this.camera     = new Camera(this, config.camera);
@@ -122,9 +107,10 @@ class Pixalo extends Utils {
         this.audio    = new AudioManager(this.config.worker);
 
         this.animations   = {};
-        this.maxDeltaTime = 1000 / 30;
+        this.deltaTime    = 0;
+        this.maxDeltaTime = Math.max(1000 / this.config.fps, 16.67);
 
-        this.#applyCanvasConfig();
+        this._applyCanvasConfig();
 
         this.draggedEntity   = null;
         this.draggedEntities = new Map();
@@ -135,7 +121,28 @@ class Pixalo extends Utils {
 
         this.trigger('ready');
     }
-    #applyCanvasConfig () {
+
+    _createWindow ($window = null) {
+        let {innerWidth, outerWidth, innerHeight, outerHeight, devicePixelRatio} = $window || {
+            innerWidth : window.innerWidth,
+            innerHeight: window.innerHeight,
+            outerWidth : window.outerWidth,
+            outerHeight: window.outerHeight,
+            devicePixelRatio: window.devicePixelRatio
+        };
+        const zoom = Math.round((outerWidth / innerWidth) * 100);
+        const bar  = outerHeight - innerHeight;
+
+        this.window = {
+            zoom,
+            width : Math.round(outerWidth * 100 / zoom),
+            height: outerHeight - bar,
+            outerWidth, outerHeight,
+            innerWidth, innerHeight,
+            devicePixelRatio
+        };
+    }
+    _applyCanvasConfig () {
         const config = this.config;
         const canvas = this.canvas;
 
@@ -179,6 +186,7 @@ class Pixalo extends Utils {
             });
         }
     }
+
     #setupWorker (config) {
         if (typeof DedicatedWorkerGlobalScope === 'undefined')
             throw new Error('Please run Pixalo in the Worker environment.');
@@ -212,30 +220,21 @@ class Pixalo extends Utils {
                 this.on('worker_msg', this._workerEventListeners);
                 return;
             }
-
             this.warn('Browser environment is required. This feature is only available in browser context.');
             return;
         }
 
-        // Start observing canvas size changes
-        new ResizeObserver(this._handleResize.bind(this)).observe(this.canvas);
+        this._windowResizeListener();
 
         // Setup auto resize if target specified
-        const target = this.config.resizeTarget;
-        if (target === 'window') {
-            window.addEventListener('resize', () => {
-                this.resize(window.innerWidth, window.innerHeight);
-            });
-        } else if (target === 'document') {
-            window.addEventListener('resize', () => {
-                this.resize(document.documentElement.clientWidth, document.documentElement.clientHeight);
-            });
+        let target = this.config.resizeTarget;
+        if (target && target !== 'window' && target !== 'document') {
+            if (typeof target === 'string')
+                target = document.querySelector(target);
+            this._setupResizeObserver(target);
         } else {
-            // It's a selector string
-            const element = document.querySelector(target);
-            if (element && ResizeObserver) {
-                new ResizeObserver(() => this._handleResize()).observe(element);
-            }
+            // Start observing canvas size changes
+            this._setupResizeObserver(this.canvas);
         }
 
         document.addEventListener('visibilitychange', () => {
@@ -321,7 +320,19 @@ class Pixalo extends Utils {
 
         // Setup auto resize if target specified
         if (data?.action === 'resizedTarget') {
-            this._updateCanvasSize(data.width, data.height);
+            if (typeof data.window === 'object') {
+                this._createWindow(data.window);
+                data.width  = this.window.width;
+                data.height = this.window.height;
+            }
+
+            if (this.config.autoResize)
+                this.resize(data.width, data.height, true, this.config.resizeTarget);
+            else
+                this.trigger('resize', {
+                    width : data.width, height: data.height,
+                    target: this.config.resizeTarget
+                });
         }
     }
 
@@ -349,6 +360,8 @@ class Pixalo extends Utils {
     quality (value) {
         if (value === undefined)
             return this.config.quality;
+
+        value = Number(value.toFixed(2));
 
         this.config.quality = value;
         this._applyQuality(value);
@@ -486,12 +499,12 @@ class Pixalo extends Utils {
     /** ======== DATA ======== */
     data (key, value) {
         if (value === undefined)
-            return this._data.get(key);
-        this._data.set(key, value);
+            return this.dataset.get(key);
+        this.dataset.set(key, value);
         return this;
     }
     unset (key) {
-        this._data.delete(key);
+        this.dataset.delete(key);
         return this;
     }
     /** ======== END ======== */
@@ -592,31 +605,11 @@ class Pixalo extends Utils {
         deltaTime = Math.min(deltaTime, this.maxDeltaTime);
 
         // Update FPS counter for every frame
-        if (this.debugger.active) {
-            this.debugger.frameCount++;
-            const now = timestamp;
-            const timeSinceLastUpdate = now - this.debugger.lastFpsUpdate;
-
-            if (timeSinceLastUpdate >= 1000) {
-                const actualFPS = Math.round((this.debugger.frameCount * 1000) / timeSinceLastUpdate);
-                const targetFPS = this.config.fps;
-
-                // Limit FPS ratio to a maximum of 100%
-                const ratio = Math.min(Math.round((actualFPS / targetFPS) * 100), 100);
-
-                this.debugger.fps = {
-                    target: targetFPS,
-                    actual: Math.min(actualFPS, targetFPS), // Limiting actual FPS to maximum target FPS
-                    ratio: ratio
-                };
-
-                this.debugger.frameCount = 0;
-                this.debugger.lastFpsUpdate = now;
-            }
-        }
+        this.debugger._updateFPS(timestamp);
 
         // Execute frame only if enough time has passed
         if (deltaTime >= frameInterval) {
+            this.deltaTime = deltaTime;
             this.clear();
             this.updateTimers(timestamp);
             this.update(deltaTime);
@@ -642,12 +635,10 @@ class Pixalo extends Utils {
         if (this.physicsEnabled)
             this.physics.update(deltaTime);
 
-        if (this.collisionEnabled && !this.physicsEnabled) {
-            const collidableEntities = Array.from(this.entities.values()).filter(
-                entity => entity.collision?.enabled
-            );
-            this.collision.updateCollisions(collidableEntities);
-        }
+        if (this.collisionEnabled && !this.physicsEnabled)
+            this.collision.updateCollisions([
+                ...this.getEntities(!this.config.collision.children).values()
+            ]);
 
         this.emitters.update(deltaTime);
 
@@ -783,7 +774,7 @@ class Pixalo extends Utils {
         this._applyQuality(this.config.quality);
 
         // Reset canvas to original config
-        this.#applyCanvasConfig();
+        this._applyCanvasConfig();
 
         return this;
     }
@@ -1002,7 +993,7 @@ class Pixalo extends Utils {
         );
     
         // Handle duplicate IDs
-        if (this.entities.has(entity.id)) {
+        if (this.getEntities().has(entity.id)) {
             // entity.id = `${entity.id}_${Date.now()}`;
             this.error(`Entity (${entity.id}) exists with this ID`);
             return entity;
@@ -1024,14 +1015,32 @@ class Pixalo extends Utils {
     
         return entity;
     }
-    getAllEntities () {
-        return this.entities;
+    getEntities (onlyParents = true) {
+        if (onlyParents)
+            return this.entities;
+
+        const map = new Map();
+        const walk = e => {
+            map.set(e.id, e);
+            e.children.forEach(walk);
+        };
+        this.entities.forEach(walk);
+        return map;
     }
     getSortedEntitiesByZIndex () {
         return Array.from(this.entities.values()).sort((a, b) => b.zIndex - a.zIndex);
     }
     find (entityId) {
         return this.entities.get(entityId);
+    }
+    findDeep (id) {
+        if (this.entities.has(id)) return this.entities.get(id);
+
+        for (const entity of this.entities.values()) {
+            const found = this._findDeepChildren(entity, id);
+            if (found) return found;
+        }
+        return null;
     }
     findByClass (className) {
         className = className.trim();
@@ -1043,6 +1052,33 @@ class Pixalo extends Utils {
         return Array.from(this.entities)
             .filter(([, ent]) => ent.class.has(className))
             .map(([, ent]) => ent);
+    }
+    findDeepByClass (className) {
+        className = className.trim();
+        if (!className) {
+            this.warn('ClassName is required');
+            return [];
+        }
+
+        const result = [];
+        for (const entity of this.entities.values())
+            this._findDeepClassChildren(entity, className, result);
+
+        return result;
+    }
+    _findDeepChildren (entity, id) {
+        if (entity.id === id) return entity;
+        for (const child of entity.children.values()) {
+            const found = this._findDeepChildren(child, id);
+            if (found) return found;
+        }
+        return null;
+    }
+    _findDeepClassChildren (entity, className, out) {
+        if (entity.class.has(className)) out.push(entity);
+        for (const child of entity.children.values()) {
+            this._findDeepClassChildren(child, className, out);
+        }
     }
     isEntity (target) {
         return target instanceof Entity;
@@ -1058,14 +1094,14 @@ class Pixalo extends Utils {
         this.collisionEnabled = true;
         return this;
     }
-    checkCollision (entity1, entity2) {
-        return this.collision.detectCollisionDetailed(entity1, entity2);
+    checkCollision (entityA, entityB) {
+        return this.collision.detectCollisionDetailed(entityA, entityB);
     }
     checkGroupCollision (group1, group2) {
-        for (const entity1 of group1) {
-            for (const entity2 of group2) {
-                if (this.detectCollisionDetailed(entity1, entity2)) {
-                    return {entity1, entity2};
+        for (const entityA of group1) {
+            for (const entityB of group2) {
+                if (this.detectCollisionDetailed(entityA, entityB)) {
+                    return {entityA, entityB};
                 }
             }
         }

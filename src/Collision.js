@@ -9,8 +9,8 @@ class Collision {
     constructor () {
         this.decomposedShapes = new Map();
         this.activeCollisions = new Map();
-        this.lastPositions = new Map();
-        this.customPathCache = new Map();
+        this.lastPositions    = new Map();
+        this.customPathCache  = new Map();
     }
 
     updateCollisions (entities) {
@@ -46,37 +46,44 @@ class Collision {
 
         for (let i = 0; i < entities.length; i++) {
             for (let j = i + 1; j < entities.length; j++) {
-                const entity1 = entities[i];
-                const entity2 = entities[j];
+                const entityA = entities[i];
+                const entityB = entities[j];
 
-                if (!entity1.collision?.enabled || !entity2.collision?.enabled) continue;
-                if (entity1.collision.group === entity2.collision.group) continue;
+                if (!entityA.collision?.enabled || !entityB.collision?.enabled) continue;
+                if (entityA.collision.group === entityB.collision.group) continue;
 
-                const collisionKey = `${entity1.id}-${entity2.id}`;
-                const collisionInfo = this.detectCollisionDetailed(entity1, entity2);
+                const collisionKey  = `${entityA.id}-${entityB.id}`;
+                const collisionInfo = this.detectCollisionDetailed(entityA, entityB);
 
                 if (collisionInfo.colliding && !this.activeCollisions.has(collisionKey)) {
-                    newCollisions.set(collisionKey, {
-                        entity1,
-                        entity2,
+                    const collisionData = {
+                        entityA,
+                        entityB,
                         ...collisionInfo,
                         timestamp: Date.now()
-                    });
+                    };
 
-                    // Emit collision events
-                    entity1.trigger('collide', {
-                        entity: entity2,
-                        side: collisionInfo.side1,
-                        otherSide: collisionInfo.side2,
+                    newCollisions.set(collisionKey, collisionData);
+
+                    // Trigger global collision event
+                    if (entityA.engine) {
+                        entityA.engine.trigger('collisions', collisionData);
+                    }
+
+                    // Entity-specific collision events
+                    entityA.trigger('collide', {
+                        entity: entityB,
+                        side: collisionInfo.sideA,
+                        otherSide: collisionInfo.sideB,
                         point: collisionInfo.point,
                         overlap: collisionInfo.overlap,
                         normal: collisionInfo.normal
                     });
 
-                    entity2.trigger('collide', {
-                        entity: entity1,
-                        side: collisionInfo.side2,
-                        otherSide: collisionInfo.side1,
+                    entityB.trigger('collide', {
+                        entity: entityA,
+                        side: collisionInfo.sideB,
+                        otherSide: collisionInfo.sideA,
                         point: collisionInfo.point,
                         overlap: collisionInfo.overlap,
                         normal: {
@@ -91,9 +98,22 @@ class Collision {
         // Review of completed encounters
         for (const [key, collision] of this.activeCollisions) {
             if (!newCollisions.has(key)) {
-                const {entity1, entity2, side1, side2} = collision;
-                entity1.trigger('collideEnd', {entity: entity2, side: side1});
-                entity2.trigger('collideEnd', {entity: entity1, side: side2});
+                const {entityA, entityB, sideA, sideB} = collision;
+                const timestamp = Date.now();
+
+                // Trigger global collisionEnd event
+                if (entityA.engine) {
+                    entityA.engine.trigger('collisionEnd', {
+                        colliding: false,
+                        entityA, entityB,
+                        sideA, sideB,
+                        timestamp
+                    });
+                }
+
+                // Entity-specific collisionEnd events
+                entityA.trigger('collideEnd', {entity: entityB, side: sideA, timestamp});
+                entityB.trigger('collideEnd', {entity: entityA, side: sideB, timestamp});
             }
         }
 
@@ -101,24 +121,27 @@ class Collision {
     }
 
     /** ======== COLLISIONS ======== */
-    detectCollisionDetailed (entity1, entity2) {
+    detect (entityA, entityB) {
+        return this.detectCollisionDetailed(entityA, entityB);
+    }
+    detectCollisionDetailed (entityA, entityB) {
         // Adding a threshold for borderRadius
-        const hasRoundedCorners = entity1.styles.borderRadius > 0 || entity2.styles.borderRadius > 0;
-        const threshold = hasRoundedCorners ? Math.max(entity1.styles.borderRadius, entity2.styles.borderRadius) * 0.2 : 0;
+        const hasRoundedCorners = entityA.styles.borderRadius > 0 || entityB.styles.borderRadius > 0;
+        const threshold = hasRoundedCorners ? Math.max(entityA.styles.borderRadius, entityB.styles.borderRadius) * 0.2 : 0;
 
-        if (!this.checkAABBCollision(entity1, entity2, threshold)) {
+        if (!this.checkAABBCollision(entityA, entityB, threshold)) {
             return {colliding: false};
         }
 
         // Collision detection based on the shape of entities
-        if (entity1.styles.shape === 'circle' && entity2.styles.shape === 'circle') {
-            return this.detectCircleCollision(entity1, entity2);
+        if (entityA.styles.shape === 'circle' && entityB.styles.shape === 'circle') {
+            return this.detectCircleCollision(entityA, entityB);
         }
 
-        const vertices1 = this.getVertices(entity1);
-        const vertices2 = this.getVertices(entity2);
+        const vertices1 = this.getVertices(entityA);
+        const vertices2 = this.getVertices(entityB);
 
-        return this.detectSATCollision(vertices1, vertices2, entity1, entity2, threshold);
+        return this.detectSATCollision(vertices1, vertices2, entityA, entityB, threshold);
     }
     detectCircleCollision (circle1, circle2) {
         const radius1 = Math.min(circle1.collision.width, circle1.collision.height) / 2;
@@ -150,8 +173,8 @@ class Collision {
 
         return {
             colliding: true,
-            side1: this.getSideFromNormal(normal),
-            side2: this.getSideFromNormal({x: -normal.x, y: -normal.y}),
+            sideA: this.getSideFromNormal(normal),
+            sideB: this.getSideFromNormal({x: -normal.x, y: -normal.y}),
             point: {
                 x: center1.x + normal.x * radius1,
                 y: center1.y + normal.y * radius1
@@ -160,7 +183,7 @@ class Collision {
             normal
         };
     }
-    detectSATCollision (vertices1, vertices2, entity1, entity2, threshold = 0) {
+    detectSATCollision (vertices1, vertices2, entityA, entityB, threshold = 0) {
         let minOverlap = Infinity;
         let collisionNormal = {x: 0, y: 0};
 
@@ -170,7 +193,6 @@ class Collision {
             const projection1 = this.projectVertices(vertices1, axis);
             const projection2 = this.projectVertices(vertices2, axis);
 
-            // Applying threshold to overlap calculation
             const overlap = this.getOverlap(projection1, projection2) - threshold;
 
             if (overlap <= 0)
@@ -183,21 +205,45 @@ class Collision {
         }
 
         const collisionPoint = this.findCollisionPoint(vertices1, vertices2);
-        const side1 = this.getSideFromNormal(collisionNormal);
-        const side2 = this.getOppositeSide(side1);
+
+        // Calculating the center of two objects
+        const center1 = this.getEntityCenter(entityA);
+        const center2 = this.getEntityCenter(entityB);
+
+        // Calculate the vector from the center of `entityA` to the center of `entityB`
+        const directionVector = {
+            x: center2.x - center1.x,
+            y: center2.y - center1.y
+        };
+
+        // If the dot product of the direction vector and the normal is negative, invert the normal.
+        const dotProduct = directionVector.x * collisionNormal.x + directionVector.y * collisionNormal.y;
+        if (dotProduct < 0) {
+            collisionNormal.x = -collisionNormal.x;
+            collisionNormal.y = -collisionNormal.y;
+        }
+
+        const sideA = this.getSideFromNormal(collisionNormal);
+        const sideB = this.getOppositeSide(sideA);
 
         return {
             colliding: true,
-            side1,
-            side2,
+            sideA,
+            sideB,
             point: collisionPoint,
             overlap: minOverlap,
             normal: collisionNormal
         };
     }
-    checkAABBCollision (entity1, entity2, threshold = 0) {
-        const bounds1 = this.getAABB(entity1);
-        const bounds2 = this.getAABB(entity2);
+    getEntityCenter(entity) {
+        return {
+            x: entity.absoluteX + entity.collision.x + entity.collision.width / 2,
+            y: entity.absoluteY + entity.collision.y + entity.collision.height / 2
+        };
+    }
+    checkAABBCollision (entityA, entityB, threshold = 0) {
+        const bounds1 = this.getAABB(entityA);
+        const bounds2 = this.getAABB(entityB);
 
         // Applying thresholds in AABB analysis
         return (bounds1.minX - threshold) <= (bounds2.maxX + threshold) &&
@@ -205,14 +251,12 @@ class Collision {
             (bounds1.minY - threshold) <= (bounds2.maxY + threshold) &&
             (bounds1.maxY + threshold) >= (bounds2.minY - threshold);
     }
-    getSideFromNormal (normal) {
+    getSideFromNormal(normal) {
         const angle = Math.atan2(normal.y, normal.x) * 180 / Math.PI;
 
         if (angle > -45 && angle <= 45) return 'right';
         if (angle > 45 && angle <= 135) return 'bottom';
         if (angle > 135 || angle <= -135) return 'left';
-        // if (angle > -135 && angle <= -45) return 'top';
-
         return 'top';
     }
     getSideFromCenters (entityA, entityB) {
@@ -756,7 +800,7 @@ class Collision {
 
         const collisionsToRemove = [];
         this.activeCollisions.forEach((collision, key) => {
-            if (collision.entity1.id === entity.id || collision.entity2.id === entity.id) {
+            if (collision.entityA.id === entity.id || collision.entityB.id === entity.id) {
                 collisionsToRemove.push(key);
             }
         });
@@ -764,8 +808,8 @@ class Collision {
         collisionsToRemove.forEach(key => {
             const collision = this.activeCollisions.get(key);
             if (collision) {
-                const otherEntity = collision.entity1.id === entity.id ? collision.entity2 : collision.entity1;
-                const otherSide = collision.entity1.id === entity.id ? collision.side2 : collision.side1;
+                const otherEntity = collision.entityA.id === entity.id ? collision.entityB : collision.entityA;
+                const otherSide = collision.entityA.id === entity.id ? collision.sideB : collision.sideA;
                 otherEntity.trigger('collideEnd', {entity, side: otherSide});
                 this.activeCollisions.delete(key);
             }

@@ -24,20 +24,32 @@ Pixalo follows a component-based architecture where each system operates indepen
 
 ```typescript
 const game = new Pixalo('#canvas', {
-    worker: Boolean,                              // Enable web worker mode
     width: 800,
     height: 600,
     fps: 60,
+    context: {
+      // If you have a different, customized `context` that exactly emulates the commands and functions of `CanvasRenderingContext2D`,
+      // enter its ID here.
+      id: '2d',
+      
+      // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getContextAttributes
+      alpha: true,
+      colorSpace: 'srgb',
+      desynchronized: true,
+      willReadFrequently: false,
+    },
+    appendTo: String|HTMLElement,                 // Default(`body`) - Specify where to add the `canvas` tag
     quality: window.devicePixelRatio || 1,
     background: 'transparent' | '#fff' | 'hsl(178 80.6% 6.1%)',
     imageRendering: String,                       // Canvas image rendering style
     resizeTarget: 'window' | 'document' | `#${string}` | `.${string}` | HTMLElement,
-    autoStartStop: true,                          // pause rendering when tab is hidden, resume when visible
+    autoResize: Boolean,                          // Default(`true`) - Set to `true` for automatic resizing.
+    autoStartStop: Boolean,                       // Default(`true`) pause rendering when tab is hidden, resume when visible
+    debugger: DebuggerConfig<object> | Boolean,   // See Debugger class documentation
     grid: GridConfig<object> | Boolean,           // See Grid class documentation
     collision: CollisionConfig<object> | Boolean, // See Collision class documentation
     physics: PhysicsConfig<object> | Boolean,     // See Physics class documentation
     camera: CameraConfig<object> | Undefined,     // See Camera class documentation
-    debugger: DebuggerConfig<object> | Boolean,   // See Debugger class documentation
 });
 ```
 
@@ -1093,15 +1105,24 @@ game.append(entity);
 const duplicate = game.append('player', {}); // ID conflict handled
 ```
 
-### `getAllEntities()`: Map
+### `getEntities(onlyParents)`: Map
 
 Returns a Map of all entities in the game world.
+
+| Name        | Type    | Default |
+|-------------|---------|---------|
+| onlyParents | Boolean | true    |
 
 **Usage Examples:**
 
 ```javascript
-const entities = game.getAllEntities();
+const entities = game.getEntities();
 console.log(`Total entities: ${entities.size}`);
+```
+
+```javascript
+const entities = game.getEntities(false); // Get all entities + all children of entities
+console.log(`Total entities and children: ${entities.size}`);
 ```
 
 ### `getSortedEntitiesByZIndex()`: Array
@@ -1132,6 +1153,25 @@ if (player) {
 }
 ```
 
+### `findDeep(id)`: Entity | null
+
+Recursively searches the entire entity tree for an entity with the given `id`.  
+Starts from every root-level entity and walks down through all children.
+
+| Name | Type   | Default |
+|------|--------|---------|
+| id   | String | —       |
+
+**Returns:**  
+The requested `Entity` instance if found; otherwise `null`.
+
+**Usage Examples:**
+
+```javascript
+const player = game.findDeep('player-42');
+if (player) player.data('health', 100);
+```
+
 ### `findByClass(className)`: Array
 
 Finds all entities that have the specified CSS class.
@@ -1145,6 +1185,25 @@ Finds all entities that have the specified CSS class.
 ```javascript
 const enemies = game.findByClass('enemy');
 enemies.forEach(enemy => enemy.kill());
+```
+
+### `findDeepByClass(className)`: Array<Entity>
+
+Recursively collects every entity (root or nested) whose `class` property equals the supplied `className`.  
+The search is case-sensitive and trims surrounding whitespace.
+
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| className | String | —       |
+
+**Returns:**  
+An array containing all matching entities; empty array if none found or `className` is blank.
+
+**Usage Examples:**
+
+```javascript
+const enemies = game.findDeepByClass('Enemy');
+enemies.forEach(e => e.data('damage', 10));
 ```
 
 ### `isEntity(target)`: Boolean
@@ -1205,14 +1264,14 @@ Disables the collision detection system.
 game.disableCollisions();
 ```
 
-### `checkCollision(entity1, entity2)`: Object | Boolean
+### `checkCollision(entityA, entityB)`: Object | Boolean
 
 Checks collision between two specific entities.
 
 | Name    | Type   | Default |
 |---------|--------|---------|
-| entity1 | Entity | -       |
-| entity2 | Entity | -       |
+| entityA | Entity | -       |
+| entityB | Entity | -       |
 
 **Usage Examples:**
 
@@ -1243,8 +1302,8 @@ const enemies = game.findByClass('enemy');
 const collision = game.checkGroupCollision(bullets, enemies);
 
 if (collision) {
-    game.kill(collision.entity1.id);
-    game.kill(collision.entity2.id);
+    game.kill(collision.entityA.id);
+    game.kill(collision.entityB.id);
 }
 ```
 
@@ -1867,39 +1926,39 @@ const progress = game.Ease.easeInOutQuad(0.5); // Smooth curve at 50%
 ### Canvas and Context
 
 - `canvas` - HTML5 Canvas element
-- `ctx` - 2D rendering context
+- `ctx`    - 2D rendering context
 - `config` - Engine configuration object
 - `window` - Window dimensions and device info
 
 ### State Management
 
-- `running` - Boolean indicating if game loop is active
+- `running`  - Boolean indicating if game loop is active
 - `entities` - Map of all game entities
-- `assets` - Map of loaded assets
-- `timers` - Map of active timers
-- `_data` - Map for custom global data
+- `assets`   - Map of loaded assets
+- `timers`   - Map of active timers
+- `dataset`  - Map for custom global data
 
 ### Input State
 
-- `pressedKeys` - Set of currently pressed keys
-- `draggedEntity` - Currently dragged entity (mouse)
+- `pressedKeys`     - Set of currently pressed keys
+- `draggedEntity`   - Currently dragged entity (mouse)
 - `draggedEntities` - Map of dragged entities (touch)
-- `hoveredEntity` - Currently hovered entity
+- `hoveredEntity`   - Currently hovered entity
 
 ### Subsystems
 
-- `debugger` - Debug system instance
-- `camera` - Camera system instance
+- `debugger`   - Debug system instance
+- `camera`     - Camera system instance
 - `background` - Background system instance
-- `grid` - Grid system instance
-- `physics` - Physics system instance
-- `collision` - Collision system instance
-- `tileMap` - TileMap system instance
-- `emitters` - Particle emitter system instance
-- `audio` - Audio manager instance
+- `grid`       - Grid system instance
+- `physics`    - Physics system instance
+- `collision`  - Collision system instance
+- `tileMap`    - TileMap system instance
+- `emitters`   - Particle emitter system instance
+- `audio`      - Audio manager instance
 
 ### Configuration Flags
 
-- `gridEnabled` - Grid rendering enabled
-- `physicsEnabled` - Physics system enabled
+- `gridEnabled`      - Grid rendering enabled
+- `physicsEnabled`   - Physics system enabled
 - `collisionEnabled` - Collision detection enabled

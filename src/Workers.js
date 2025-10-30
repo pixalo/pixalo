@@ -3,7 +3,7 @@
  * @Repository: https://github.com/pixalo
  * @License: MIT
  */
-import Pixalo from './Pixalo.js';
+import Pixalo       from './Pixalo.js';
 import AudioManager from './AudioManager.js';
 
 class Workers {
@@ -11,7 +11,7 @@ class Workers {
     static workers = new Map();
 
     static async register (selector, script, options = {}) {
-        let canvas = this.#handleSelector(selector);
+        let canvas = this.#handleSelector(selector, options?.appendTo || null);
         const wid = `worker_${Math.floor(Math.random() * 99999)}`;
         const offscreen = canvas.transferControlToOffscreen();
         let blobUrl = null;
@@ -31,12 +31,9 @@ class Workers {
 
         const worker = new Worker(blobUrl || script, {type: options.type || 'module'});
         worker.postMessage({
-            wid: wid, canvas: offscreen,
-            window: {
-                width: window.innerWidth,
-                height: window.innerHeight,
-                devicePixelRatio: window.devicePixelRatio
-            }
+            wid: wid,
+            canvas: offscreen,
+            window: this.#getWindow()
         }, [offscreen]);
 
         worker.onmessage = event => {
@@ -57,6 +54,15 @@ class Workers {
 
         return wid;
     }
+    static #getWindow () {
+        return {
+            innerWidth : window.innerWidth,
+            innerHeight: window.innerHeight,
+            outerWidth : window.outerWidth,
+            outerHeight: window.outerHeight,
+            devicePixelRatio: window.devicePixelRatio
+        };
+    }
 
     static send (wid, message) {
         if (this.workers.has(wid)) {
@@ -74,28 +80,8 @@ class Workers {
         }
     }
 
-    static #handleSelector (selector) {
-        let canvas;
-
-        if (typeof selector === 'string') {
-            canvas = document.querySelector(selector);
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-
-                if (selector.startsWith('#')) {
-                    canvas.id = selector.replace('#', '');
-                } else {
-                    selector = selector.replace('.', '');
-                    canvas.classList.add(selector);
-                }
-
-                document.body.appendChild(canvas);
-            }
-        } else if (selector instanceof HTMLCanvasElement) {
-            canvas = selector;
-        } else {
-            throw new Error('Invalid selector');
-        }
+    static #handleSelector (selector, appendTo) {
+        let canvas = Pixalo._handleCanvasSelector(selector, appendTo);
 
         canvas.tabIndex = 0;
         canvas.style.outline = 'none';
@@ -129,31 +115,35 @@ class Workers {
                 break;
             }
             case 'set_resize_target': {
-                const target = data.target;
-                if (target === 'window') {
+                let target = data.target;
+
+                if (target === 'window' || target === 'document') {
                     window.addEventListener('resize', () => {
-                        this.send(data.wid, {
-                            action: 'resizedTarget',
-                            width: window.innerWidth,
-                            height: window.innerHeight,
-                        })
+                        const result = {
+                            action: 'resizedTarget'
+                        };
+
+                        if (target === 'window') {
+                            result.window = this.#getWindow();
+                        } else if (target === 'document') {
+                            result.width  = document.documentElement.clientWidth;
+                            result.height = document.documentElement.clientHeight;
+                        }
+
+                        this.send(data.wid, result);
                     });
-                } else if (target === 'document') {
-                    document.addEventListener('resize', () => this.send(data.wid, {
-                        action: 'resizedTarget',
-                        width : document.innerWidth,
-                        height: document.innerHeight,
-                    }));
                 } else {
-                    // It's a selector string
-                    const element = document.querySelector(target);
-                    if (element && ResizeObserver) {
-                        new ResizeObserver(() => this.send(data.wid, {
-                            action: 'resizedTarget',
-                            width : element.offsetWidth,
-                            height: element.offsetHeight,
-                        })).observe(element);
-                    }
+                    if (typeof target === 'string')
+                        target = document.querySelector(target);
+
+                    if (!target instanceof HTMLElement || typeof document === 'undefined' || typeof ResizeObserver === 'undefined')
+                        return;
+
+                    new ResizeObserver(() => this.send(data.wid, {
+                        action: 'resizedTarget',
+                        width : target.offsetWidth,
+                        height: target.offsetHeight
+                    })).observe(target);
                 }
                 break;
             }

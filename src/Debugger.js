@@ -12,15 +12,12 @@ class Debugger {
         this.active = config.active || false;
         this.panel  = config.panel  ?? true;
         this.hotKey = config.hotKey ?? true;
+        this.renderItems = config.items ?? true;
 
-        this.fps = config.fps || {
-            target: 60,
-            actual: 60,
-            ratio: 100
-        };
+        this.fps = config.fps;
 
-        this.lastFpsUpdate = performance.now();
         this.frameCount = 0;
+        this.lastFpsUpdate = performance.now();
 
         this.items = new Map();
 
@@ -38,6 +35,31 @@ class Debugger {
                 if (!this.hotKey) return;
                 this.active = !this.active;
             });
+        }
+    }
+
+    _updateFPS (timestamp) {
+        if (!this.active) return;
+
+        this.frameCount++;
+        const fps = this.fps.target;
+        const now = timestamp;
+        const timeSinceLastUpdate = now - this.lastFpsUpdate;
+
+        if (timeSinceLastUpdate >= 1000) {
+            const actualFPS = Math.round((this.frameCount * 1000) / timeSinceLastUpdate);
+
+            // Limit FPS ratio to a maximum of 100%
+            const ratio = Math.min(Math.round((actualFPS / fps) * 100), 100);
+
+            this.fps = {
+                target: fps,
+                actual: Math.min(actualFPS, fps), // Limiting actual FPS to maximum target FPS
+                ratio
+            };
+
+            this.frameCount = 0;
+            this.lastFpsUpdate = now;
         }
     }
 
@@ -325,7 +347,7 @@ class Debugger {
         ctx.restore();
     }
     render (ctx) {
-        if (!this.active) return;
+        if (!this.active || !this.renderItems) return;
 
         this.items.forEach((item, debugId) => {
             let renderData;

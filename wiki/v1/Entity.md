@@ -119,6 +119,25 @@ if (child) {
 }
 ```
 
+### `findDeep(id)`: Entity | null
+
+Recursively searches the entire entity tree for an entity with the given `id`.  
+Starts from every root-level entity and walks down through all children.
+
+| Name | Type   | Default |
+|------|--------|---------|
+| id   | String | —       |
+
+**Returns:**  
+The requested `Entity` instance if found; otherwise `null`.
+
+**Usage Examples:**
+
+```javascript
+const player = entity.findDeep('player-42');
+if (player) player.data('health', 100);
+```
+
 ### findByClass(className): Entity[]
 
 Returns an array of direct child entities that have the specified class.
@@ -133,14 +152,43 @@ const buttons = entity.findByClass('button');
 buttons.forEach(button => button.style({ color: '#blue' }));
 ```
 
-### getEntities(): Entity[]
+### `findDeepByClass(className)`: Array<Entity>
 
-Returns an array containing this entity and all its descendants in a flat structure.
+Recursively collects every entity (root or nested) whose `class` property equals the supplied `className`.  
+The search is case-sensitive and trims surrounding whitespace.
 
-**Usage Example:**
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| className | String | —       |
+
+**Returns:**  
+An array containing all matching entities; empty array if none found or `className` is blank.
+
+**Usage Examples:**
+
 ```javascript
-const allEntities = entity.getEntities();
-console.log(`Total entities: ${allEntities.length}`);
+const enemies = entity.findDeepByClass('Enemy');
+enemies.forEach(e => e.data('damage', 10));
+```
+
+### `getEntities(onlyParents)`: Map
+
+Returns a map of all children of this entity.
+
+| Name        | Type    | Default |
+|-------------|---------|---------|
+| onlyParents | Boolean | true    |
+
+**Usage Examples:**
+
+```javascript
+const entities = entity.getEntities();
+console.log(`Total entities: ${entities.size}`);
+```
+
+```javascript
+const entities = entity.getEntities(false); // Get all children + all children of entities
+console.log(`Total entities and children: ${entities.size}`);
 ```
 
 ### clone(newId): Entity
@@ -155,6 +203,87 @@ Creates a deep copy of the entity including all its properties, children, event 
 ```javascript
 const clonedEntity = entity.clone('newEntityId');
 const autoIdClone = entity.clone(); // Auto-generated ID
+```
+
+### `next(cycle)`: Entity | null
+
+Returns the next sibling entity in the container (parent's children or entities).  
+Wraps to the first item if `cycle` is true and the current entity is the last one.
+
+| Name  | Type    | Default |
+|-------|---------|---------|
+| cycle | Boolean | false   |
+
+**Usage Examples:**
+
+```javascript
+const next = entity.next();
+if (next) next.style('rotation', 90);
+```
+
+```javascript
+const first = entity.next(true); // loop back to first
+```
+
+### `prev(cycle)`: Entity | null
+
+Returns the previous sibling entity in the entities.  
+Wraps to the last item if `cycle` is true and the current entity is the first one.
+
+| Name  | Type    | Default |
+|-------|---------|---------|
+| cycle | Boolean | false   |
+
+**Usage Examples:**
+
+```javascript
+const prev = entity.prev();
+if (prev) prev.hide();
+```
+
+```javascript
+const last = entity.prev(true); // loop back to last
+```
+
+### `siblings()`: Array<Entity>
+
+Returns an array of all sibling entities (excludes the current entity).
+
+| Name | Type |
+|------|------|
+
+**Usage Examples:**
+
+```javascript
+const others = entity.siblings();
+others.forEach(s => s.hide());
+```
+
+### `swap(parent)`: Entity
+
+Moves the `entity` into the specified `parent` entity, removing it from its entity `parent`.
+
+| Name   | Type   |
+|--------|--------|
+| parent | Entity |
+
+**Usage Examples:**
+
+```javascript
+entity.swap(newParent);
+```
+
+### `empty()`: Entity
+
+Destroys all child entities of the current entity, leaving it with an empty children collection.
+
+| Name | Type |
+|------|------|
+
+**Usage Examples:**
+
+```javascript
+entity.empty(); // clear all children
 ```
 
 ### updatePosition(): void

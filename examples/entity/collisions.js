@@ -18,6 +18,31 @@ const game = new Pixalo('#canvas', {
 });
 game.start();
 
+game.on({
+    collisions: data => {
+        const {entityA, entityB, point, timestamp} = data;
+
+        // Add collision point marker
+        game.debugger.addItem(`collision-${timestamp}`, {
+            x: point.x - 2,
+            y: point.y - 2,
+            width: 4,
+            height: 4,
+            shape: 'circle',
+            strokeColor: 'rgba(255, 255, 0, 1)',
+            fillColor: 'rgba(255, 255, 0, 0.6)'
+        });
+
+        // Remove after short time
+        game.timeout(() => {
+            game.debugger.removeItem(`collision-${timestamp}`);
+        }, 1000);
+    },
+    collisionEnd: data => {
+        game.log('Global: End Collision', data);
+    }
+});
+
 const rectangle = game.append('rectangle', {
     width: 30,
     height: 30,

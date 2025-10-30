@@ -7,31 +7,92 @@ import Collision from './Collision.js';
 
 class Utils {
 
+    static _handleCanvasSelector (selector, appendTo = null) {
+        let canvas;
+
+        if (typeof selector === 'string') {
+            canvas = document.querySelector(selector);
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+
+                if (selector.startsWith('#'))
+                    canvas.id = selector.replace('#', '');
+                else {
+                    selector  = selector.replace('.', '');
+                    canvas.classList.add(selector);
+                }
+
+                if (!appendTo || typeof appendTo === 'string')
+                    appendTo = document.querySelector(appendTo || 'body');
+
+                appendTo.appendChild(canvas);
+            }
+        } else if (selector instanceof HTMLCanvasElement)
+            return selector
+        else
+            throw new Error('Invalid HTMLCanvasElement')
+
+        return canvas;
+    }
+
     /** ======== RESIZE ======== */
-    resize (width, height) {
-        this._updateCanvasSize(width, height);
+    resize (width, height, trigger = true, target = null) {
+        this._updateCanvasSize(width, height, trigger, target);
         return this;
     }
-    _handleResize () {
-        const width = this.canvas.offsetWidth;
-        const height = this.canvas.offsetHeight;
-        this._updateCanvasSize(width, height);
+    _windowResizeListener () {
+        window.addEventListener('resize', () => {
+            const target = this.config.resizeTarget;
+            let width, height, resize = false;
+
+            this._createWindow();
+
+            if (target === 'window') {
+                width  = this.window.width;
+                height = this.window.height;
+                resize = true;
+            } else if (target === 'document') {
+                width  = document.documentElement.clientWidth;
+                height = document.documentElement.clientHeight;
+                resize = true;
+            }
+
+            if (resize && !this.config.autoResize) {
+                this.trigger('resize', {width, height, target: 'window'});
+                return;
+            }
+
+            if (resize)
+                this.resize(width, height, true, 'window');
+        });
     }
-    _updateCanvasSize (width, height) {
+    _setupResizeObserver (element) {
+        if (!element instanceof HTMLElement || typeof document === 'undefined' || typeof ResizeObserver === 'undefined') return;
+        new ResizeObserver(() => {
+            const width  = element.offsetWidth;
+            const height = element.offsetHeight;
+            if (this.config.autoResize) {
+                this.resize(width, height, true, element);
+                return;
+            }
+            this.trigger('resize', {width, height, target: element});
+        }).observe(element);
+    }
+    _updateCanvasSize (width, height, trigger, target) {
         // Update the base dimensions
-        this.baseWidth = width;
+        this.baseWidth  = width;
         this.baseHeight = height;
 
         // Update config dimensions
-        this.config.width = width;
+        this.config.width  = width;
         this.config.height = height;
 
         // Update canvas physical size (considering quality)
-        this.canvas.width = width * this.config.quality;
+        this.canvas.width  = width * this.config.quality;
         this.canvas.height = height * this.config.quality;
 
         // Update canvas display size
-        this.canvas.style.width = width + 'px';
+        this.canvas.style.width  = width + 'px';
         this.canvas.style.height = height + 'px';
 
         // Reset context scale
@@ -49,10 +110,8 @@ class Utils {
         });
 
         // Trigger resize event
-        this.trigger('resize', {
-            width: width,
-            height: height
-        });
+        if (trigger)
+            this.trigger('resize', {width, height, target});
     }
     /** ======== END ======== */
 
