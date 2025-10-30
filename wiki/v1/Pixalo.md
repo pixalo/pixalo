@@ -1105,15 +1105,24 @@ game.append(entity);
 const duplicate = game.append('player', {}); // ID conflict handled
 ```
 
-### `getAllEntities()`: Map
+### `getEntities(onlyParents)`: Map
 
 Returns a Map of all entities in the game world.
+
+| Name        | Type    | Default |
+|-------------|---------|---------|
+| onlyParents | Boolean | true    |
 
 **Usage Examples:**
 
 ```javascript
-const entities = game.getAllEntities();
+const entities = game.getEntities();
 console.log(`Total entities: ${entities.size}`);
+```
+
+```javascript
+const entities = game.getEntities(false); // Get all entities + all children of entities
+console.log(`Total entities and children: ${entities.size}`);
 ```
 
 ### `getSortedEntitiesByZIndex()`: Array
@@ -1144,6 +1153,25 @@ if (player) {
 }
 ```
 
+### `findDeep(id)`: Entity | null
+
+Recursively searches the entire entity tree for an entity with the given `id`.  
+Starts from every root-level entity and walks down through all children.
+
+| Name | Type   | Default |
+|------|--------|---------|
+| id   | String | —       |
+
+**Returns:**  
+The requested `Entity` instance if found; otherwise `null`.
+
+**Usage Examples:**
+
+```javascript
+const player = game.findDeep('player-42');
+if (player) player.data('health', 100);
+```
+
 ### `findByClass(className)`: Array
 
 Finds all entities that have the specified CSS class.
@@ -1157,6 +1185,25 @@ Finds all entities that have the specified CSS class.
 ```javascript
 const enemies = game.findByClass('enemy');
 enemies.forEach(enemy => enemy.kill());
+```
+
+### `findDeepByClass(className)`: Array<Entity>
+
+Recursively collects every entity (root or nested) whose `class` property equals the supplied `className`.  
+The search is case-sensitive and trims surrounding whitespace.
+
+| Name      | Type   | Default |
+|-----------|--------|---------|
+| className | String | —       |
+
+**Returns:**  
+An array containing all matching entities; empty array if none found or `className` is blank.
+
+**Usage Examples:**
+
+```javascript
+const enemies = game.findDeepByClass('Enemy');
+enemies.forEach(e => e.data('damage', 10));
 ```
 
 ### `isEntity(target)`: Boolean

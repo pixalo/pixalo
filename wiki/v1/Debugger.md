@@ -659,7 +659,7 @@ game.on('keydown', (key) => {
             break;
         case 'f3':
             // Toggle entity debug visualization
-            game.getAllEntities().forEach((entity, id) => {
+            game.getEntities().forEach((entity, id) => {
                 if (game.debugger.hasItem(id)) {
                     game.debugger.removeItem(id);
                 } else {
@@ -696,7 +696,7 @@ const exportDebugInfo = () => {
     const debugInfo = {
         timestamp: Date.now(),
         fps: game.debugger.fps,
-        entities: game.getAllEntities().size,
+        entities: game.getEntities().size,
         debugItems: game.debugger.getAllItems().length,
         systems: {
             physics: game.physicsEnabled,

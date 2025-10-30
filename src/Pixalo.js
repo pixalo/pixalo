@@ -66,7 +66,7 @@ class Pixalo extends Utils {
             grid: config.grid || false,
             quality: config.quality || this.window.devicePixelRatio,
             physics: config.physics || {},
-            collision: config.collision || {},
+            collision: config.collision || {children: false},
             background: config.background || '#ffffff',
             resizeTarget: config.resizeTarget || false,
             autoResize: config.autoResize ?? true,
@@ -655,12 +655,10 @@ class Pixalo extends Utils {
         if (this.physicsEnabled)
             this.physics.update(deltaTime);
 
-        if (this.collisionEnabled && !this.physicsEnabled) {
-            const collidableEntities = Array.from(this.entities.values()).filter(
-                entity => entity.collision?.enabled
-            );
-            this.collision.updateCollisions(collidableEntities);
-        }
+        if (this.collisionEnabled && !this.physicsEnabled)
+            this.collision.updateCollisions([
+                ...this.getEntities(!this.config.collision.children).values()
+            ]);
 
         this.emitters.update(deltaTime);
 
@@ -1015,7 +1013,7 @@ class Pixalo extends Utils {
         );
     
         // Handle duplicate IDs
-        if (this.entities.has(entity.id)) {
+        if (this.getEntities().has(entity.id)) {
             // entity.id = `${entity.id}_${Date.now()}`;
             this.error(`Entity (${entity.id}) exists with this ID`);
             return entity;
@@ -1037,14 +1035,32 @@ class Pixalo extends Utils {
     
         return entity;
     }
-    getAllEntities () {
-        return this.entities;
+    getEntities (onlyParents = true) {
+        if (onlyParents)
+            return this.entities;
+
+        const map = new Map();
+        const walk = e => {
+            map.set(e.id, e);
+            e.children.forEach(walk);
+        };
+        this.entities.forEach(walk);
+        return map;
     }
     getSortedEntitiesByZIndex () {
         return Array.from(this.entities.values()).sort((a, b) => b.zIndex - a.zIndex);
     }
     find (entityId) {
         return this.entities.get(entityId);
+    }
+    findDeep (id) {
+        if (this.entities.has(id)) return this.entities.get(id);
+
+        for (const entity of this.entities.values()) {
+            const found = this._findDeepChildren(entity, id);
+            if (found) return found;
+        }
+        return null;
     }
     findByClass (className) {
         className = className.trim();
@@ -1057,14 +1073,18 @@ class Pixalo extends Utils {
             .filter(([, ent]) => ent.class.has(className))
             .map(([, ent]) => ent);
     }
-    findDeep (id) {
-        if (this.entities.has(id)) return this.entities.get(id);
-
-        for (const entity of this.entities.values()) {
-            const found = this._findDeepChildren(entity, id);
-            if (found) return found;
+    findDeepByClass (className) {
+        className = className.trim();
+        if (!className) {
+            this.warn('ClassName is required');
+            return [];
         }
-        return null;
+
+        const result = [];
+        for (const entity of this.entities.values())
+            this._findDeepClassChildren(entity, className, result);
+
+        return result;
     }
     _findDeepChildren (entity, id) {
         if (entity.id === id) return entity;
@@ -1073,6 +1093,12 @@ class Pixalo extends Utils {
             if (found) return found;
         }
         return null;
+    }
+    _findDeepClassChildren (entity, className, out) {
+        if (entity.class.has(className)) out.push(entity);
+        for (const child of entity.children.values()) {
+            this._findDeepClassChildren(child, className, out);
+        }
     }
     isEntity (target) {
         return target instanceof Entity;

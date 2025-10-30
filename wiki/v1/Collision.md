@@ -6,6 +6,17 @@ including rotation, scaling, and skewing.
 > :warning: **Note**: This class is managed and updated automatically by the Pixalo class. You don't need to call
 > methods from this class directly unless you want to perform custom operations or advanced collision handling.
 
+# Configurations
+
+```javascript
+const game = new Pixalo('#game', {
+    // ...
+    collision: {
+        children: false // Default(false) - Are the children of creatures also collidable?
+    }
+});
+```
+
 ## Public Methods
 
 ---
@@ -28,6 +39,10 @@ collision disabled and manages collision enter/exit events.
 // Typically handled automatically by Pixalo, but can be called manually
 game.collision.updateCollisions([entityA, entityB, entity3]);
 ```
+
+### `detect(entityA, entityB): Object`
+
+This function calls the same `detectCollisionDetailed` function and is only added for quick and easy access to the `detectCollisionDetailed` function.
 
 ---
 

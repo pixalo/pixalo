@@ -13,6 +13,17 @@
 - Added `autoResize` key to automatically resize the Canvas tag. If you do not want automatic resizing, set it to `false`. However, the `resize` event will be called if this key is `false` and you can manually set your desired size on the Canvas.
 - The `appendTo` key has been added so you can specify where the `canvas` tag should be added.
 
+### `Pixalo` class
+- Function name `getAllEntities` changed to `getEntities`
+- Two new functions have been added to the class: `findDeep` and `findDeepByClass`
+- From now on, you can specify whether children detect physical collisions or not by setting the `children` value on the `collision` object.
+
+### `Entity` class
+- Added new functions: `findDeep`, `findDeepByClass`, `next`, `prev`, `siblings`, `swap`, `parent`, `empty`
+- Fixed the problem and optimized the `kill` and `_destroy` functions to prevent memory leaks.
+
+### `Collision` class
+- Added `detect` function: This function calls the same `detectCollisionDetailed` function and was added only for quick and easy access to the `detectCollisionDetailed` function.
 
 ---
 

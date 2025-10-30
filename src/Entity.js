@@ -217,7 +217,7 @@ class Entity {
         }
 
         // Handle duplicate IDs
-        if (this.children.has(child.id)) {
+        if (this.engine.getEntities().has(child.id)) {
             // child.id = `${child.id}_${Date.now()}`;
             this.engine.error(`Entity (${child.id}) exists with this ID`);
             return child;
@@ -264,6 +264,15 @@ class Entity {
     find (childId) {
         return this.children.get(childId);
     }
+    findDeep (id) {
+        if (this.children.has(id)) return this.children.get(id);
+
+        for (const entity of this.children.values()) {
+            const found = this.engine._findDeepChildren(entity, id);
+            if (found) return found;
+        }
+        return null;
+    }
     findByClass (className) {
         className = className.trim();
         if (!className) {
@@ -275,27 +284,30 @@ class Entity {
             .filter(([, ent]) => ent.class.has(className))
             .map(([, ent]) => ent);
     }
-    findDeep (id) {
-        if (this.children.has(id)) return this.children.get(id);
-
-        for (const entity of this.children.values()) {
-            const found = this.engine._findDeepChildren(entity, id);
-            if (found) return found;
+    findDeepByClass (className) {
+        className = className.trim();
+        if (!className) {
+            this.engine.warn('ClassName is required');
+            return [];
         }
-        return null;
+
+        const result = [];
+        for (const entity of this.children.values())
+            this.engine._findDeepClassChildren(entity, className, result);
+
+        return result;
     }
-    getEntities () {
-        const entities = [this];
+    getEntities (onlyParents = true) {
+        if (onlyParents)
+            return this.children;
 
-        const addChildren = (entity) => {
-            entity.children.forEach(child => {
-                entities.push(child);
-                addChildren(child);
-            });
+        const map = new Map();
+        const walk = e => {
+            map.set(e.id, e);
+            e.children.forEach(walk);
         };
-
-        addChildren(this);
-        return entities;
+        this.children.forEach(walk);
+        return map;
     }
     clone (newId = null) {
         // Create base configuration from current entity state
@@ -838,7 +850,7 @@ class Entity {
         }
 
         /* ---------- capture initial states ---------- */
-        const entities = this.getEntities();
+        const entities = [this, ...this.getEntities(false).values()];
         const initialPositions = new Map();
         entities.forEach(e =>
             initialPositions.set(e, {x: e.x, y: e.y, absoluteX: e.absoluteX, absoluteY: e.absoluteY})
